@@ -51,6 +51,35 @@ def verify_ozon(cid, akey):
 
 EYE_JS = """
 <script>
+function checkPasswords() {
+    var p1 = document.getElementById("pw_r1");
+    var p2 = document.getElementById("pw_r2");
+    var hint = document.getElementById("pw_match_hint");
+    if (!p1 || !p2 || !hint) return true;
+    if (p2.value.length === 0) { hint.textContent = ""; return true; }
+    if (p1.value !== p2.value) {
+        hint.textContent = "Пароли не совпадают";
+        hint.style.color = "#e74c3c";
+        p2.style.borderColor = "#e74c3c";
+        return false;
+    } else {
+        hint.textContent = "Пароли совпадают ✓";
+        hint.style.color = "#27ae60";
+        p2.style.borderColor = "#27ae60";
+        return true;
+    }
+}
+function submitRegister(e) {
+    if (!checkPasswords()) { e.preventDefault(); }
+}
+document.addEventListener("DOMContentLoaded", function() {
+    var p2 = document.getElementById("pw_r2");
+    if (p2) {
+        p2.addEventListener("input", function() { checkPasswords(); });
+        var form = p2.closest("form");
+        if (form) form.addEventListener("submit", submitRegister);
+    }
+});
 function togglePw(inputId, btn) {
     var inp = document.getElementById(inputId);
     if (inp.type === 'password') {
@@ -470,6 +499,7 @@ def register():
         '<input type="email" name="email" class="fi" placeholder="your@email.com" required autocomplete="email"' + email_val + '></div>'
         + pw_input('password', 'pw_r1', 'Мин. 8 символов', 'Пароль')
         + pw_input('confirm', 'pw_r2', 'Повторите пароль', 'Повторите пароль')
+        + '<div id="pw_match_hint" style="font-size:.82rem;margin-top:-.6rem;margin-bottom:1rem;min-height:1.1em"></div>'
         + '<button class="btn bp" style="width:100%">Создать аккаунт бесплатно</button>'
         '</form>'
         '<p class="al2" onclick="location=\'/login\'">Есть аккаунт? Войти</p>'
