@@ -559,7 +559,6 @@ def api_keys():
           '<div style="display:flex;align-items:flex-start;gap:.5rem;font-size:.9rem"><span style="color:#27ae60;font-weight:700;margin-top:.1rem">&#10003;</span><div><strong>Report</strong> &mdash; отчёты и статистика продаж</div></div>'
           '<div style="display:flex;align-items:flex-start;gap:.5rem;font-size:.9rem"><span style="color:#27ae60;font-weight:700;margin-top:.1rem">&#10003;</span><div><strong>Warehouse</strong> &mdash; для проверки подключения</div></div>'
           '</div>'
-          '<p style="font-size:.82rem;color:#888">&#128274; Всё остальное &mdash; финансы, заказы, FBS/FBO, возвраты &mdash; давать не нужно. Сервис это не использует.</p>'
           '</div>')
     if len(keys) < MAX_KEYS:
         c += '<form method="POST" action="/api-keys/add"><div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">'
