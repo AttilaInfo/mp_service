@@ -13,7 +13,6 @@ limiter = Limiter(app=app, key_func=get_remote_address,
 USERS = {}
 MAX_KEYS = 10
 
-# ── helpers ────────────────────────────────────────────────────────────────
 def hash_pw(pw):
     return bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
 
@@ -41,7 +40,7 @@ def verify_ozon(cid, akey):
             json={}, timeout=8)
         if r.status_code == 200: return True, 'Ключ работает'
         if r.status_code == 401: return False, 'Неверный Client ID или API Key'
-        if r.status_code == 403: return False, 'Нет прав — проверьте настройки ключа'
+        if r.status_code == 403: return False, 'Нет прав - проверьте настройки ключа'
         return False, 'Ошибка Озона: ' + str(r.status_code)
     except requests.exceptions.Timeout:
         return False, 'Озон не отвечает (timeout)'
@@ -50,7 +49,6 @@ def verify_ozon(cid, akey):
     except Exception as ex:
         return False, 'Ошибка: ' + str(ex)[:80]
 
-# ── HTML builder ───────────────────────────────────────────────────────────
 CSS = (
     '*{margin:0;padding:0;box-sizing:border-box}'
     'body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;background:#f0f2f5;color:#1a1a2e;min-height:100vh}'
@@ -74,8 +72,13 @@ CSS = (
     '.card .lb{font-size:.85rem;color:#666;margin-top:.2rem}'
     '.fg{margin-bottom:1.2rem}'
     '.fg label{display:block;margin-bottom:.4rem;font-weight:600;font-size:.9rem;color:#444}'
-    '.fg input{width:100%;padding:.75rem 1rem;border:2px solid #e0e0e0;border-radius:8px;font-size:.95rem;transition:.2s}'
-    '.fg input:focus{outline:none;border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.1)}'
+    '.fi{width:100%;padding:.75rem 1rem;border:2px solid #e0e0e0;border-radius:8px;font-size:.95rem;transition:.2s}'
+    '.fi:focus{outline:none;border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.1)}'
+    '.pw-wrap{position:relative}'
+    '.pw-wrap .fi{padding-right:2.8rem}'
+    '.pw-eye{position:absolute;right:.85rem;top:50%;transform:translateY(-50%);'
+    'cursor:pointer;font-size:1.1rem;user-select:none;color:#888}'
+    '.pw-eye:hover{color:#667eea}'
     '.hn{font-size:.8rem;color:#888;margin-top:.3rem}'
     '.btn{padding:.75rem 1.5rem;border:none;border-radius:8px;cursor:pointer;font-size:.95rem;'
     'font-weight:600;transition:.2s;display:inline-flex;align-items:center;gap:.4rem}'
@@ -114,6 +117,36 @@ CSS = (
     '@media(max-width:600px){.tc{grid-template-columns:1fr}.hdr{justify-content:center}}'
 )
 
+# Глазик для поля пароля
+def eye(field_id):
+    return (
+        '<span class="pw-eye" '
+        'onclick="var f=document.getElementById(\'' + field_id + '\'),'
+        'this.textContent=f.type==\'password\'?\'&#128064;\':\'&#128065;\','
+        'f.type=f.type==\'password\'?\'text\':\'password\'">'
+        '&#128065;</span>'
+    )
+
+def pw_field(name, field_id, placeholder):
+    return (
+        '<div class="fg"><label>Пароль</label>'
+        '<div class="pw-wrap">'
+        '<input type="password" name="' + name + '" id="' + field_id + '" '
+        'class="fi" placeholder="' + placeholder + '" required>'
+        + eye(field_id) +
+        '</div></div>'
+    )
+
+def pw_field2(name, field_id, placeholder, label='Повторите пароль'):
+    return (
+        '<div class="fg"><label>' + label + '</label>'
+        '<div class="pw-wrap">'
+        '<input type="password" name="' + name + '" id="' + field_id + '" '
+        'class="fi" placeholder="' + placeholder + '" required>'
+        + eye(field_id) +
+        '</div></div>'
+    )
+
 def html(body, title='A/B Testing Pro'):
     return (
         '<!DOCTYPE html><html lang="ru"><head>'
@@ -125,16 +158,16 @@ def html(body, title='A/B Testing Pro'):
     )
 
 def nav_bar(pg):
-    pages = [('/', 'dash', '&#128202; Панель'),
-             ('/tests', 'tests', '&#129514; Тесты'),
-             ('/api-keys', 'keys', '&#128273; API ключи'),
-             ('/settings', 'cfg', '&#9881; Настройки')]
+    pages = [('/', 'dash', 'Панель'),
+             ('/tests', 'tests', 'Тесты'),
+             ('/api-keys', 'keys', 'API ключи'),
+             ('/settings', 'cfg', 'Настройки')]
     items = ''
     for url, p, label in pages:
         cls = 'nb on' if pg == p else 'nb'
         items += '<a href="{}" class="{}">{}</a>'.format(url, cls, label)
-    items += '<a href="/logout" class="nb">&#128682; Выход</a>'
-    return '<div class="hdr"><h1>&#128202; A/B Testing Pro</h1><nav>' + items + '</nav></div>'
+    items += '<a href="/logout" class="nb">Выход</a>'
+    return '<div class="hdr"><h1>A/B Testing Pro</h1><nav>' + items + '</nav></div>'
 
 def page(content, pg='', logged=True):
     top = nav_bar(pg) if logged else ''
@@ -143,7 +176,7 @@ def page(content, pg='', logged=True):
 def alert(msg, kind='ok'):
     return '<div class="al ' + kind + '">' + msg + '</div>' if msg else ''
 
-# ── auth routes ────────────────────────────────────────────────────────────
+# ── auth ───────────────────────────────────────────────────────────────────
 @app.route('/login', methods=['GET', 'POST'])
 @limiter.limit("20 per minute")
 def login():
@@ -170,9 +203,8 @@ def login():
         + alert(err, 'er') +
         '<form method="POST">'
         '<div class="fg"><label>Email</label>'
-        '<input type="email" name="email" placeholder="your@email.com" required></div>'
-        '<div class="fg"><label>Пароль</label>'
-        '<input type="password" name="password" placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;" required></div>'
+        '<input type="email" name="email" class="fi" placeholder="your@email.com" required></div>'
+        + pw_field('password', 'pw_login', 'Ваш пароль') +
         '<button class="btn bp" style="width:100%">Войти</button>'
         '</form>'
         '<p class="al2" onclick="location=\'/register\'">Нет аккаунта? Зарегистрироваться</p>'
@@ -215,15 +247,13 @@ def register():
         + alert(err, 'er') +
         '<form method="POST">'
         '<div class="fg"><label>Имя</label>'
-        '<input type="text" name="name" placeholder="Иван Иванов" required maxlength="100"></div>'
+        '<input type="text" name="name" class="fi" placeholder="Иван Иванов" required maxlength="100"></div>'
         '<div class="fg"><label>Email</label>'
-        '<input type="email" name="email" placeholder="your@email.com" required></div>'
+        '<input type="email" name="email" class="fi" placeholder="your@email.com" required></div>'
         '<div class="tc">'
-        '<div class="fg"><label>Пароль</label>'
-        '<input type="password" name="password" placeholder="Мин. 8 символов" required></div>'
-        '<div class="fg"><label>Повторите</label>'
-        '<input type="password" name="confirm" placeholder="Повторите пароль" required></div>'
-        '</div>'
+        + pw_field('password', 'pw_reg1', 'Мин. 8 символов')
+        + pw_field2('confirm', 'pw_reg2', 'Повторите пароль')
+        + '</div>'
         '<button class="btn bp" style="width:100%">Создать аккаунт</button>'
         '</form>'
         '<p class="al2" onclick="location=\'/login\'">Есть аккаунт? Войти</p>'
@@ -236,7 +266,7 @@ def logout():
     session.clear()
     return redirect('/login')
 
-# ── main pages ─────────────────────────────────────────────────────────────
+# ── pages ──────────────────────────────────────────────────────────────────
 @app.route('/')
 def index():
     u = me()
@@ -288,12 +318,15 @@ def api_keys():
     c += alert(msg, 'ok')
     c += alert(err, 'er')
     c += '<div class="box"><h2>Добавить подключение</h2>'
-    c += '<div class="tip" style="margin-bottom:1.2rem">Где взять ключи: войдите в <a href="https://seller.ozon.ru/app/settings/api-keys" target="_blank" style="color:#1e40af;font-weight:600">seller.ozon.ru - Настройки - API ключи</a> - нажмите «Сгенерировать ключ»</div>'
+    c += '<div class="tip" style="margin-bottom:1.2rem">Где взять ключи: <a href="https://seller.ozon.ru/app/settings/api-keys" target="_blank" style="color:#1e40af;font-weight:600">seller.ozon.ru - Настройки - API ключи</a> - нажмите «Сгенерировать ключ»</div>'
     if len(keys) < MAX_KEYS:
         c += '<form method="POST" action="/api-keys/add"><div class="tc">'
-        c += '<div class="fg"><label>Название магазина</label><input type="text" name="shop" placeholder="Мой магазин" required maxlength="100"><div class="hn">Любое удобное название</div></div>'
-        c += '<div class="fg"><label>Client ID</label><input type="text" name="cid" placeholder="123456789" required maxlength="50"><div class="hn">Числовой ID из личного кабинета</div></div>'
-        c += '</div><div class="fg"><label>API Key</label><input type="password" name="akey" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" required maxlength="200"><div class="hn">Хранится безопасно. Показываются только последние 4 символа</div></div>'
+        c += '<div class="fg"><label>Название магазина</label><input type="text" name="shop" class="fi" placeholder="Мой магазин" required maxlength="100"><div class="hn">Любое удобное название</div></div>'
+        c += '<div class="fg"><label>Client ID</label><input type="text" name="cid" class="fi" placeholder="123456789" required maxlength="50"><div class="hn">Числовой ID из личного кабинета</div></div>'
+        c += '</div>'
+        c += '<div class="fg"><label>API Key</label>'
+        c += '<div class="pw-wrap"><input type="password" name="akey" id="akey" class="fi" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" required maxlength="200">' + eye('akey') + '</div>'
+        c += '<div class="hn">Хранится безопасно. Показываются только последние 4 символа</div></div>'
         c += '<button class="btn bp">Проверить и сохранить</button><span style="font-size:.85rem;color:#888;margin-left:1rem">Ключ будет проверен через API Озона</span></form>'
     else:
         c += alert('Достигнут лимит ' + str(MAX_KEYS) + ' ключей на аккаунт', 'wn')
@@ -342,7 +375,7 @@ def add_key():
         'added': datetime.utcnow().strftime('%Y-%m-%d')
     })
     if ok:
-        return redirect('/api-keys?msg=Магазин+' + shop + '+подключён')
+        return redirect('/api-keys?msg=Магазин+' + shop + '+успешно+подключён')
     return redirect('/api-keys?err=Ключ+добавлен+но+проверка:+' + msg.replace(' ', '+'))
 
 @app.route('/api-keys/del/<int:i>', methods=['POST'])
@@ -355,7 +388,7 @@ def del_key(i):
         return redirect('/api-keys?msg=' + name + '+удалён')
     return redirect('/api-keys?err=Ключ+не+найден')
 
-# ── error handlers ─────────────────────────────────────────────────────────
+# ── errors ─────────────────────────────────────────────────────────────────
 @app.errorhandler(404)
 def e404(e):
     c = '<div style="text-align:center;padding:4rem"><p style="font-size:3rem">&#128269;</p><h2 style="margin:1rem 0">Страница не найдена</h2><a href="/" class="btn bp" style="margin-top:1rem">На главную</a></div>'
