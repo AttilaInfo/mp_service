@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect, session
+from flask import Flask, request, redirect, session, Response
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import os, bcrypt, requests, re
@@ -49,7 +49,6 @@ def verify_ozon(cid, akey):
     except Exception as ex:
         return False, 'Ошибка: ' + str(ex)[:80]
 
-# JavaScript для глазика — вынесен отдельно, без конфликта кавычек
 EYE_JS = """
 <script>
 function togglePw(inputId, btn) {
@@ -74,15 +73,14 @@ def pw_input(name, field_id, placeholder, label_text='Пароль'):
         '<span>' + label_text + '</span>'
         '<span id="eye_' + field_id + '" '
         'onclick="togglePw(\'' + field_id + '\', this)" '
-        'style="font-size:.78rem;color:#aaa;cursor:pointer;font-weight:400;'
-        'user-select:none;transition:color .2s">показать</span>'
+        'style="font-size:.78rem;color:#aaa;cursor:pointer;font-weight:400;user-select:none;transition:color .2s">показать</span>'
         '</label>'
         '<input type="password" id="' + field_id + '" name="' + name + '" '
         'class="fi" placeholder="' + placeholder + '" required>'
         '</div>'
     )
 
-CSS = (
+APP_CSS = (
     '*{margin:0;padding:0;box-sizing:border-box}'
     'body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;background:#f0f2f5;color:#1a1a2e;min-height:100vh}'
     'a{text-decoration:none;color:inherit}'
@@ -138,29 +136,119 @@ CSS = (
     '.sub{text-align:center;color:#888;margin-bottom:1.8rem;font-size:.9rem}'
     '.al2{text-align:center;margin-top:1rem;font-size:.9rem;color:#667eea;cursor:pointer}'
     '.al2:hover{text-decoration:underline}'
-    '.tc{display:grid;grid-template-columns:1fr 1fr;gap:1rem}'
     'table{width:100%;border-collapse:collapse}'
     'th{background:#f8f9fa;padding:.75rem 1rem;text-align:left;font-size:.85rem;color:#666;font-weight:600}'
     'td{padding:.75rem 1rem;border-top:1px solid #f0f0f0;font-size:.9rem}'
-    '@media(max-width:600px){.tc{grid-template-columns:1fr}.hdr{justify-content:center}}'
+    '@media(max-width:600px){.hdr{justify-content:center}}'
 )
 
-def html(body, title='A/B Testing Pro'):
+LANDING_CSS = (
+    '@import url(https://fonts.googleapis.com/css2?family=Unbounded:wght@400;700;900&family=Onest:wght@300;400;500;600&display=swap);'
+    ':root{--c1:#ff4d6d;--c2:#ff9a3c;--c3:#4361ee;--c4:#7209b7;'
+    '--grad:linear-gradient(135deg,#ff4d6d,#ff9a3c);'
+    '--grad2:linear-gradient(135deg,#4361ee,#7209b7);'
+    '--dark:#0d0d0d;--dark2:#161616;--dark3:#1e1e1e;--text:#f0f0f0;--muted:#888;}'
+    '*{margin:0;padding:0;box-sizing:border-box}'
+    'html{scroll-behavior:smooth}'
+    'body{font-family:Onest,sans-serif;background:var(--dark);color:var(--text);overflow-x:hidden}'
+    'a{text-decoration:none;color:inherit}'
+    '.lnav{position:fixed;top:0;left:0;right:0;z-index:100;padding:1.2rem 2rem;'
+    'display:flex;align-items:center;justify-content:space-between;'
+    'backdrop-filter:blur(20px);background:rgba(13,13,13,.8);border-bottom:1px solid rgba(255,255,255,.06)}'
+    '.lnav-logo{font-family:Unbounded,sans-serif;font-size:1.1rem;font-weight:700;'
+    'background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent}'
+    '.lnav-links{display:flex;gap:2rem;align-items:center}'
+    '.lnav-links a{color:var(--muted);font-size:.9rem;transition:.2s}'
+    '.lnav-links a:hover{color:var(--text)}'
+    '.lnav-cta{background:var(--grad);color:#fff !important;padding:.6rem 1.4rem;border-radius:100px;font-weight:600;font-size:.9rem;transition:.2s}'
+    '.lnav-cta:hover{opacity:.85;transform:scale(1.04)}'
+    '.hero{min-height:100vh;display:flex;align-items:center;justify-content:center;'
+    'text-align:center;padding:8rem 2rem 4rem;position:relative;overflow:hidden}'
+    '.hero-bg{position:absolute;inset:0;pointer-events:none}'
+    '.blob{position:absolute;border-radius:50%;filter:blur(80px);opacity:.25}'
+    '.b1{width:500px;height:500px;background:var(--c1);top:-100px;left:-100px;animation:drift 8s ease-in-out infinite}'
+    '.b2{width:400px;height:400px;background:var(--c3);bottom:-50px;right:-50px;animation:drift 10s ease-in-out infinite reverse}'
+    '.b3{width:300px;height:300px;background:var(--c2);top:30%;left:50%;animation:drift 12s ease-in-out infinite 2s}'
+    '@keyframes drift{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(30px,-20px) scale(1.1)}}'
+    '.hero-badge{display:inline-flex;align-items:center;gap:.5rem;background:rgba(255,77,109,.12);'
+    'border:1px solid rgba(255,77,109,.3);color:var(--c1);padding:.4rem 1rem;border-radius:100px;'
+    'font-size:.82rem;font-weight:600;margin-bottom:2rem;letter-spacing:.05em}'
+    '.hero h1{font-family:Unbounded,sans-serif;font-size:clamp(2.2rem,6vw,4.5rem);'
+    'font-weight:900;line-height:1.1;margin-bottom:1.5rem;letter-spacing:-.02em}'
+    '.hero h1 span{background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent}'
+    '.hero-sub{font-size:clamp(1rem,2.5vw,1.2rem);color:var(--muted);max-width:580px;margin:0 auto 2.5rem;line-height:1.7;font-weight:300}'
+    '.hero-btns{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap}'
+    '.btn-hero{padding:1rem 2.5rem;border-radius:100px;font-weight:700;font-size:1rem;transition:.3s;cursor:pointer;border:none;text-decoration:none}'
+    '.btn-main{background:var(--grad);color:#fff;box-shadow:0 8px 32px rgba(255,77,109,.35);display:inline-block}'
+    '.btn-main:hover{transform:translateY(-3px);box-shadow:0 16px 48px rgba(255,77,109,.5);opacity:.9}'
+    '.btn-ghost{background:transparent;color:var(--text);border:1px solid rgba(255,255,255,.2);display:inline-block}'
+    '.btn-ghost:hover{background:rgba(255,255,255,.07);transform:translateY(-2px)}'
+    '.hero-stat{display:flex;gap:3rem;justify-content:center;margin-top:4rem;flex-wrap:wrap}'
+    '.stat-item{text-align:center}'
+    '.stat-n{font-family:Unbounded,sans-serif;font-size:2rem;font-weight:700;'
+    'background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent}'
+    '.stat-l{font-size:.82rem;color:var(--muted);margin-top:.3rem}'
+    '.problem{padding:6rem 2rem;max-width:900px;margin:0 auto;text-align:center}'
+    '.section-tag{display:inline-block;font-size:.78rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--c1);margin-bottom:1rem}'
+    '.section-h{font-family:Unbounded,sans-serif;font-size:clamp(1.6rem,4vw,2.8rem);font-weight:700;margin-bottom:1.5rem;line-height:1.2}'
+    '.section-sub{color:var(--muted);font-size:1.05rem;line-height:1.8;max-width:650px;margin:0 auto}'
+    '.problem-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1.5rem;margin-top:3rem;text-align:left}'
+    '.prob-card{background:var(--dark2);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:1.5rem;position:relative;overflow:hidden}'
+    '.prob-card::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:var(--grad)}'
+    '.prob-icon{font-size:2rem;margin-bottom:1rem}'
+    '.prob-card h3{font-size:1rem;font-weight:600;margin-bottom:.5rem}'
+    '.prob-card p{font-size:.88rem;color:var(--muted);line-height:1.6}'
+    '.how{padding:6rem 2rem;background:var(--dark2)}'
+    '.how-inner{max-width:1100px;margin:0 auto}'
+    '.how-title{text-align:center;margin-bottom:4rem}'
+    '.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:2rem}'
+    '.step{background:var(--dark3);border-radius:20px;padding:2rem;border:1px solid rgba(255,255,255,.05);transition:.3s}'
+    '.step:hover{border-color:rgba(255,77,109,.3);transform:translateY(-4px)}'
+    '.step-num{font-family:Unbounded,sans-serif;font-size:3.5rem;font-weight:900;'
+    'background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1;margin-bottom:1rem}'
+    '.step h3{font-size:1.1rem;font-weight:600;margin-bottom:.75rem}'
+    '.step p{font-size:.88rem;color:var(--muted);line-height:1.7}'
+    '.features{padding:6rem 2rem;max-width:1100px;margin:0 auto}'
+    '.feat-title{text-align:center;margin-bottom:4rem}'
+    '.feat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem}'
+    '.feat-card{background:var(--dark2);border:1px solid rgba(255,255,255,.06);border-radius:20px;padding:2rem;transition:.3s}'
+    '.feat-card:hover{border-color:rgba(67,97,238,.4);transform:translateY(-4px)}'
+    '.feat-ic{width:48px;height:48px;border-radius:12px;background:var(--grad2);'
+    'display:flex;align-items:center;justify-content:center;font-size:1.4rem;margin-bottom:1.2rem}'
+    '.feat-card h3{font-size:1rem;font-weight:600;margin-bottom:.5rem}'
+    '.feat-card p{font-size:.88rem;color:var(--muted);line-height:1.6}'
+    '.pricing{padding:6rem 2rem;background:var(--dark2)}'
+    '.pricing-inner{max-width:500px;margin:0 auto;text-align:center}'
+    '.price-card{background:var(--dark3);border:1px solid rgba(255,77,109,.3);border-radius:24px;padding:3rem;margin-top:3rem;position:relative;overflow:hidden}'
+    '.price-card::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:var(--grad)}'
+    '.price-badge{display:inline-block;background:var(--grad);color:#fff;font-size:.78rem;font-weight:700;padding:.3rem .9rem;border-radius:100px;margin-bottom:1.5rem}'
+    '.price-tag{font-family:Unbounded,sans-serif;font-size:3.5rem;font-weight:900;margin-bottom:.5rem}'
+    '.price-tag span{font-size:1.2rem;color:var(--muted);font-family:Onest,sans-serif;font-weight:400}'
+    '.price-sub{color:var(--muted);font-size:.9rem;margin-bottom:2rem}'
+    '.price-features{list-style:none;text-align:left;margin-bottom:2rem}'
+    '.price-features li{padding:.6rem 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:.9rem;display:flex;align-items:center;gap:.75rem}'
+    '.price-features li:last-child{border:none}'
+    '.check-ic{color:var(--c1);font-weight:700}'
+    '.cta-section{padding:8rem 2rem;text-align:center;position:relative;overflow:hidden}'
+    '.cta-bg{position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(255,77,109,.12) 0%,transparent 70%);pointer-events:none}'
+    '.cta-section h2{font-family:Unbounded,sans-serif;font-size:clamp(1.8rem,5vw,3.5rem);font-weight:900;margin-bottom:1.5rem;line-height:1.15}'
+    '.cta-section p{color:var(--muted);font-size:1.1rem;margin-bottom:2.5rem;max-width:500px;margin-left:auto;margin-right:auto}'
+    '.footer{padding:2rem;text-align:center;border-top:1px solid rgba(255,255,255,.06);color:var(--muted);font-size:.85rem}'
+    '@media(max-width:640px){.lnav-links{display:none}.hero h1{font-size:2rem}.hero-stat{gap:1.5rem}.stat-n{font-size:1.5rem}}'
+)
+
+def app_html(body, title='A/B Testing Pro'):
     return (
         '<!DOCTYPE html><html lang="ru"><head>'
-        '<meta charset="UTF-8">'
-        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        '<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
         '<title>' + title + '</title>'
-        '<style>' + CSS + '</style>'
-        + EYE_JS +
+        '<style>' + APP_CSS + '</style>' + EYE_JS +
         '</head><body>' + body + '</body></html>'
     )
 
 def nav_bar(pg):
-    pages = [('/', 'dash', 'Панель'),
-             ('/tests', 'tests', 'Тесты'),
-             ('/api-keys', 'keys', 'API ключи'),
-             ('/settings', 'cfg', 'Настройки')]
+    pages = [('/', 'dash', 'Панель'), ('/tests', 'tests', 'Тесты'),
+             ('/api-keys', 'keys', 'API ключи'), ('/settings', 'cfg', 'Настройки')]
     items = ''
     for url, p, label in pages:
         cls = 'nb on' if pg == p else 'nb'
@@ -170,16 +258,140 @@ def nav_bar(pg):
 
 def page(content, pg='', logged=True):
     top = nav_bar(pg) if logged else ''
-    return html(top + '<div class="wrap">' + content + '</div>')
+    return app_html(top + '<div class="wrap">' + content + '</div>')
 
 def alert(msg, kind='ok'):
     return '<div class="al ' + kind + '">' + msg + '</div>' if msg else ''
 
-# ── auth ───────────────────────────────────────────────────────────────────
+# ── ЛЕНДИНГ ────────────────────────────────────────────────────────────────
+@app.route('/')
+def landing():
+    if me():
+        return redirect('/dashboard')
+    html = (
+        '<!DOCTYPE html><html lang="ru"><head>'
+        '<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+        '<title>A/B Testing Pro - Больше продаж на Озоне</title>'
+        '<style>' + LANDING_CSS + '</style>'
+        '</head><body>'
+
+        '<nav class="lnav">'
+        '<div class="lnav-logo">A/B Testing Pro</div>'
+        '<div class="lnav-links">'
+        '<a href="#how">Как работает</a>'
+        '<a href="#features">Возможности</a>'
+        '<a href="#pricing">Тарифы</a>'
+        '<a href="/login">Войти</a>'
+        '<a href="/register" class="lnav-cta">Начать бесплатно</a>'
+        '</div></nav>'
+
+        '<section class="hero">'
+        '<div class="hero-bg"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div></div>'
+        '<div style="position:relative;z-index:1">'
+        '<div class="hero-badge">&#128200; Увеличьте продажи без вложений в рекламу</div>'
+        '<h1>Ваши конкуренты уже<br>тестируют. <span>А вы?</span></h1>'
+        '<p class="hero-sub">Автоматически проверяйте какие фотографии товаров продают лучше. До 10 вариантов одновременно — без Excel, без ручной работы, без догадок.</p>'
+        '<div class="hero-btns">'
+        '<a href="/register" class="btn-hero btn-main">Попробовать бесплатно 30 дней &rarr;</a>'
+        '<a href="#how" class="btn-hero btn-ghost">Как это работает?</a>'
+        '</div>'
+        '<div class="hero-stat">'
+        '<div class="stat-item"><div class="stat-n">+34%</div><div class="stat-l">средний рост конверсии</div></div>'
+        '<div class="stat-item"><div class="stat-n">до 10</div><div class="stat-l">вариантов фото в тесте</div></div>'
+        '<div class="stat-item"><div class="stat-n">30 дней</div><div class="stat-l">бесплатный период</div></div>'
+        '</div></div></section>'
+
+        '<section class="problem" style="max-width:900px;margin:0 auto;padding:6rem 2rem;text-align:center">'
+        '<div class="section-tag">Знакомо?</div>'
+        '<h2 class="section-h">Почему 90% продавцов<br>теряют деньги каждый день</h2>'
+        '<p class="section-sub">Большинство продавцов выбирают фото «на глазок» — и никогда не узнают, сколько продаж они потеряли из-за одной неудачной картинки.</p>'
+        '<div class="problem-cards">'
+        '<div class="prob-card"><div class="prob-icon">&#128064;</div><h3>Выбирают фото интуитивно</h3><p>«Мне кажется это красиво» — не аргумент. Покупатели думают иначе.</p></div>'
+        '<div class="prob-card"><div class="prob-icon">&#128202;</div><h3>Нет данных для решений</h3><p>Без теста невозможно знать, какое фото реально приносит больше кликов и продаж.</p></div>'
+        '<div class="prob-card"><div class="prob-icon">&#9200;</div><h3>Нет времени делать это вручную</h3><p>Менять фото, записывать статистику, считать конверсии — часы работы каждую неделю.</p></div>'
+        '</div></section>'
+
+        '<section class="how" id="how"><div class="how-inner">'
+        '<div class="how-title"><div class="section-tag">Просто и быстро</div><h2 class="section-h">Три шага до роста продаж</h2></div>'
+        '<div class="steps">'
+        '<div class="step"><div class="step-num">01</div><h3>Подключите магазин</h3><p>Введите API-ключ Озона. Сервис автоматически получит доступ к вашим товарам. Занимает 2 минуты.</p></div>'
+        '<div class="step"><div class="step-num">02</div><h3>Загрузите варианты фото</h3><p>От 2 до 10 вариантов первого фото. Сервис начнет показывать их покупателям по очереди.</p></div>'
+        '<div class="step"><div class="step-num">03</div><h3>Получайте результаты</h3><p>Сервис автоматически определит победителя по CTR и конверсии и применит лучшее фото.</p></div>'
+        '</div></div></section>'
+
+        '<section class="features" id="features"><div class="feat-title">'
+        '<div class="section-tag">Возможности</div><h2 class="section-h">Всё что нужно для роста</h2></div>'
+        '<div class="feat-grid">'
+        '<div class="feat-card"><div class="feat-ic">&#127922;</div><h3>До 10 вариантов в одном тесте</h3><p>Не просто A/B — полноценное мультивариантное тестирование. Тестируйте разные ракурсы, фоны, инфографику.</p></div>'
+        '<div class="feat-card"><div class="feat-ic">&#128200;</div><h3>Автоматическая ротация</h3><p>Сервис сам меняет фото и выбирает лучший вариант — вам не нужно заходить в личный кабинет каждый день.</p></div>'
+        '<div class="feat-card"><div class="feat-ic">&#128269;</div><h3>Реальная аналитика</h3><p>Просмотры, клики, CTR, продажи, конверсия — всё в одном месте. Точные цифры по каждому варианту.</p></div>'
+        '<div class="feat-card"><div class="feat-ic">&#128737;</div><h3>Безопасно и надёжно</h3><p>Ключи хранятся в зашифрованном виде. Работаем только через официальный API Озона.</p></div>'
+        '<div class="feat-card"><div class="feat-ic">&#9889;</div><h3>Быстрый старт</h3><p>Первый тест запустите за 5 минут. Никаких сложных настроек — подключили и работаете.</p></div>'
+        '<div class="feat-card"><div class="feat-ic">&#128276;</div><h3>Уведомления о результатах</h3><p>Получайте сообщения когда тест завершён и найден победитель. Не нужно постоянно проверять.</p></div>'
+        '</div></section>'
+
+        '<section class="pricing" id="pricing"><div class="pricing-inner">'
+        '<div class="section-tag" style="display:block;text-align:center">Прозрачные условия</div>'
+        '<h2 class="section-h">Начните бесплатно</h2>'
+        '<div class="price-card">'
+        '<div class="price-badge">&#127381; Специальное предложение</div>'
+        '<div class="price-tag">0 &#8381; <span>/ первые 30 дней</span></div>'
+        '<p class="price-sub">Полный доступ ко всем функциям. Без ввода карты.</p>'
+        '<ul class="price-features">'
+        '<li><span class="check-ic">&#10003;</span> Неограниченное количество товаров</li>'
+        '<li><span class="check-ic">&#10003;</span> До 10 вариантов фото в одном тесте</li>'
+        '<li><span class="check-ic">&#10003;</span> Автоматическая ротация и аналитика</li>'
+        '<li><span class="check-ic">&#10003;</span> Подключение нескольких магазинов</li>'
+        '<li><span class="check-ic">&#10003;</span> Email-уведомления о результатах</li>'
+        '<li><span class="check-ic">&#10003;</span> Поддержка 7 дней в неделю</li>'
+        '</ul>'
+        '<a href="/register" class="btn-hero btn-main" style="width:100%;justify-content:center;display:flex">Начать бесплатно &rarr;</a>'
+        '</div></div></section>'
+
+        '<section class="cta-section">'
+        '<div class="cta-bg"></div>'
+        '<div style="position:relative;z-index:1">'
+        '<h2>Хватит терять деньги<br>на неправильных фото</h2>'
+        '<p class="cta-section p" style="color:#888;font-size:1.1rem;margin:1.5rem auto 2.5rem;max-width:500px">Пока вы читаете это — ваши конкуренты уже тестируют. Начните прямо сейчас, это бесплатно.</p>'
+        '<a href="/register" class="btn-hero btn-main">Попробовать бесплатно 30 дней &rarr;</a>'
+        '</div></section>'
+
+        '<footer class="footer">'
+        '<p>&#169; 2024 A/B Testing Pro &nbsp;&middot;&nbsp; '
+        '<a href="/login" style="color:#ff4d6d">Войти</a> &nbsp;&middot;&nbsp; '
+        '<a href="/register" style="color:#ff4d6d">Регистрация</a></p>'
+        '</footer>'
+        '</body></html>'
+    )
+    return html
+
+# ── ДАШБОРД ────────────────────────────────────────────────────────────────
+@app.route('/dashboard')
+def dashboard():
+    u = me()
+    if not u: return redirect('/login')
+    kc = len(u.get('keys', []))
+    warn = alert('Добавьте API ключи Озона чтобы начать. <a href="/api-keys" style="font-weight:700">Добавить</a>', 'wn') if kc == 0 else ''
+    c = warn + '<p class="ttl">Привет, ' + u['name'] + '!</p>'
+    c += '<div class="cards">'
+    c += '<div class="card"><div class="ic">&#129514;</div><div><div class="n">2</div><div class="lb">Активных теста</div></div></div>'
+    c += '<div class="card"><div class="ic">&#128273;</div><div><div class="n">' + str(kc) + '</div><div class="lb">API подключений</div></div></div>'
+    c += '<div class="card"><div class="ic">&#128065;</div><div><div class="n">12 480</div><div class="lb">Просмотров</div></div></div>'
+    c += '<div class="card"><div class="ic">&#128200;</div><div><div class="n">+34%</div><div class="lb">Рост конверсии</div></div></div>'
+    c += '</div>'
+    c += '<div class="box"><h2>Активные тесты</h2><table>'
+    c += '<tr><th>Товар</th><th>Вариант A</th><th>Вариант B</th><th>Статус</th></tr>'
+    c += '<tr><td><strong>Рубашка M</strong><br><small style="color:#999">SKU-001</small></td><td>8.2%</td><td><strong>11.5%</strong></td><td><span class="bg g">Идет</span></td></tr>'
+    c += '<tr><td><strong>Кроссовки</strong><br><small style="color:#999">SKU-002</small></td><td><strong>9.1%</strong></td><td>7.8%</td><td><span class="bg g">Идет</span></td></tr>'
+    c += '</table></div>'
+    c += '<div class="tip">Совет: для достоверных результатов нужно минимум 100 просмотров и 7 дней тестирования.</div>'
+    return page(c, 'dash')
+
+# ── AUTH ───────────────────────────────────────────────────────────────────
 @app.route('/login', methods=['GET', 'POST'])
 @limiter.limit("20 per minute")
 def login():
-    if me(): return redirect('/')
+    if me(): return redirect('/dashboard')
     err = ''
     if request.method == 'POST':
         email = clean(request.form.get('email', '')).lower()
@@ -194,7 +406,7 @@ def login():
                 err = 'Неверный email или пароль'
             else:
                 session['email'] = email
-                return redirect('/')
+                return redirect('/dashboard')
     body = (
         '<div class="aw"><div class="ac">'
         '<h1>A/B Testing Pro</h1>'
@@ -207,14 +419,16 @@ def login():
         '<button class="btn bp" style="width:100%">Войти</button>'
         '</form>'
         '<p class="al2" onclick="location=\'/register\'">Нет аккаунта? Зарегистрироваться</p>'
+        '<p style="text-align:center;margin-top:.8rem;font-size:.85rem;color:#aaa">'
+        '<a href="/" style="color:#667eea">&#8592; На главную</a></p>'
         '</div></div>'
     )
-    return html(body)
+    return app_html(body)
 
 @app.route('/register', methods=['GET', 'POST'])
 @limiter.limit("5 per hour")
 def register():
-    if me(): return redirect('/')
+    if me(): return redirect('/dashboard')
     err = ''
     if request.method == 'POST':
         name  = clean(request.form.get('name', ''), 100)
@@ -238,11 +452,11 @@ def register():
                 'created': datetime.utcnow().strftime('%Y-%m-%d')
             }
             session['email'] = email
-            return redirect('/')
+            return redirect('/dashboard')
     body = (
         '<div class="aw"><div class="ac">'
         '<h1>A/B Testing Pro</h1>'
-        '<p class="sub">Создайте аккаунт бесплатно</p>'
+        '<p class="sub">30 дней бесплатно — без карты</p>'
         + alert(err, 'er') +
         '<form method="POST">'
         '<div class="fg"><label>Имя</label>'
@@ -250,41 +464,22 @@ def register():
         '<div class="fg"><label>Email</label>'
         '<input type="email" name="email" class="fi" placeholder="your@email.com" required></div>'
         + pw_input('password', 'pw_r1', 'Мин. 8 символов', 'Пароль')
-        + pw_input('confirm',  'pw_r2', 'Повторите пароль', 'Повторите пароль')
-        + '<button class="btn bp" style="width:100%">Создать аккаунт</button>'
+        + pw_input('confirm', 'pw_r2', 'Повторите пароль', 'Повторите пароль')
+        + '<button class="btn bp" style="width:100%">Создать аккаунт бесплатно</button>'
         '</form>'
         '<p class="al2" onclick="location=\'/login\'">Есть аккаунт? Войти</p>'
+        '<p style="text-align:center;margin-top:.8rem;font-size:.85rem;color:#aaa">'
+        '<a href="/" style="color:#667eea">&#8592; На главную</a></p>'
         '</div></div>'
     )
-    return html(body)
+    return app_html(body)
 
 @app.route('/logout')
 def logout():
     session.clear()
-    return redirect('/login')
+    return redirect('/')
 
-# ── pages ──────────────────────────────────────────────────────────────────
-@app.route('/')
-def index():
-    u = me()
-    if not u: return redirect('/login')
-    kc = len(u.get('keys', []))
-    warn = alert('Добавьте API ключи Озона чтобы начать. <a href="/api-keys" style="font-weight:700">Добавить</a>', 'wn') if kc == 0 else ''
-    c = warn + '<p class="ttl">Привет, ' + u['name'] + '!</p>'
-    c += '<div class="cards">'
-    c += '<div class="card"><div class="ic">&#129514;</div><div><div class="n">2</div><div class="lb">Активных теста</div></div></div>'
-    c += '<div class="card"><div class="ic">&#128273;</div><div><div class="n">' + str(kc) + '</div><div class="lb">API подключений</div></div></div>'
-    c += '<div class="card"><div class="ic">&#128065;</div><div><div class="n">12 480</div><div class="lb">Просмотров</div></div></div>'
-    c += '<div class="card"><div class="ic">&#128200;</div><div><div class="n">+34%</div><div class="lb">Рост конверсии</div></div></div>'
-    c += '</div>'
-    c += '<div class="box"><h2>Активные тесты</h2><table>'
-    c += '<tr><th>Товар</th><th>Вариант A</th><th>Вариант B</th><th>Статус</th></tr>'
-    c += '<tr><td><strong>Рубашка M</strong><br><small style="color:#999">SKU-001</small></td><td>8.2%</td><td><strong>11.5%</strong></td><td><span class="bg g">Идет</span></td></tr>'
-    c += '<tr><td><strong>Кроссовки</strong><br><small style="color:#999">SKU-002</small></td><td><strong>9.1%</strong></td><td>7.8%</td><td><span class="bg g">Идет</span></td></tr>'
-    c += '</table></div>'
-    c += '<div class="tip">Совет: для достоверных результатов нужно минимум 100 просмотров и 7 дней тестирования.</div>'
-    return page(c, 'dash')
-
+# ── СТРАНИЦЫ ПРИЛОЖЕНИЯ ────────────────────────────────────────────────────
 @app.route('/tests')
 def tests():
     if not me(): return redirect('/login')
@@ -303,7 +498,7 @@ def settings():
     c += '</table></div>'
     return page(c, 'cfg')
 
-# ── api keys ───────────────────────────────────────────────────────────────
+# ── API КЛЮЧИ ──────────────────────────────────────────────────────────────
 @app.route('/api-keys')
 def api_keys():
     u = me()
@@ -317,15 +512,15 @@ def api_keys():
     c += '<div class="box"><h2>Добавить подключение</h2>'
     c += '<div class="tip" style="margin-bottom:1.2rem">Где взять ключи: <a href="https://seller.ozon.ru/app/settings/api-keys" target="_blank" style="color:#1e40af;font-weight:600">seller.ozon.ru - Настройки - API ключи</a> - нажмите «Сгенерировать ключ»</div>'
     if len(keys) < MAX_KEYS:
-        c += '<form method="POST" action="/api-keys/add"><div class="tc">'
+        c += '<form method="POST" action="/api-keys/add"><div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">'
         c += '<div class="fg"><label>Название магазина</label><input type="text" name="shop" class="fi" placeholder="Мой магазин" required maxlength="100"><div class="hn">Любое удобное название</div></div>'
         c += '<div class="fg"><label>Client ID</label><input type="text" name="cid" class="fi" placeholder="123456789" required maxlength="50"><div class="hn">Числовой ID из личного кабинета</div></div>'
         c += '</div>'
-        c += pw_input('akey', 'akey', 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', 'API Key')
+        c += pw_input('akey', 'akey_field', 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', 'API Key')
         c += '<div class="hn" style="margin-top:-.8rem;margin-bottom:1rem">Хранится безопасно. Показываются только последние 4 символа</div>'
         c += '<button class="btn bp">Проверить и сохранить</button><span style="font-size:.85rem;color:#888;margin-left:1rem">Ключ будет проверен через API Озона</span></form>'
     else:
-        c += alert('Достигнут лимит ' + str(MAX_KEYS) + ' ключей на аккаунт', 'wn')
+        c += alert('Достигнут лимит ' + str(MAX_KEYS) + ' ключей', 'wn')
     c += '</div>'
     c += '<div class="box"><h2>Ваши подключения (' + str(len(keys)) + ' / ' + str(MAX_KEYS) + ')</h2>'
     if keys:
@@ -384,7 +579,7 @@ def del_key(i):
         return redirect('/api-keys?msg=' + name + '+удалён')
     return redirect('/api-keys?err=Ключ+не+найден')
 
-# ── errors ─────────────────────────────────────────────────────────────────
+# ── ОШИБКИ ─────────────────────────────────────────────────────────────────
 @app.errorhandler(404)
 def e404(e):
     c = '<div style="text-align:center;padding:4rem"><p style="font-size:3rem">&#128269;</p><h2 style="margin:1rem 0">Страница не найдена</h2><a href="/" class="btn bp" style="margin-top:1rem">На главную</a></div>'
