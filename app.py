@@ -49,6 +49,39 @@ def verify_ozon(cid, akey):
     except Exception as ex:
         return False, 'Ошибка: ' + str(ex)[:80]
 
+# JavaScript для глазика — вынесен отдельно, без конфликта кавычек
+EYE_JS = """
+<script>
+function togglePw(inputId, btn) {
+    var inp = document.getElementById(inputId);
+    if (inp.type === 'password') {
+        inp.type = 'text';
+        btn.textContent = 'скрыть';
+        btn.style.color = '#667eea';
+    } else {
+        inp.type = 'password';
+        btn.textContent = 'показать';
+        btn.style.color = '#aaa';
+    }
+}
+</script>
+"""
+
+def pw_input(name, field_id, placeholder, label_text='Пароль'):
+    return (
+        '<div class="fg">'
+        '<label style="display:flex;justify-content:space-between;align-items:center">'
+        '<span>' + label_text + '</span>'
+        '<span id="eye_' + field_id + '" '
+        'onclick="togglePw(\'' + field_id + '\', this)" '
+        'style="font-size:.78rem;color:#aaa;cursor:pointer;font-weight:400;'
+        'user-select:none;transition:color .2s">показать</span>'
+        '</label>'
+        '<input type="password" id="' + field_id + '" name="' + name + '" '
+        'class="fi" placeholder="' + placeholder + '" required>'
+        '</div>'
+    )
+
 CSS = (
     '*{margin:0;padding:0;box-sizing:border-box}'
     'body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;background:#f0f2f5;color:#1a1a2e;min-height:100vh}'
@@ -74,11 +107,6 @@ CSS = (
     '.fg label{display:block;margin-bottom:.4rem;font-weight:600;font-size:.9rem;color:#444}'
     '.fi{width:100%;padding:.75rem 1rem;border:2px solid #e0e0e0;border-radius:8px;font-size:.95rem;transition:.2s}'
     '.fi:focus{outline:none;border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.1)}'
-    '.pw-wrap{position:relative}'
-    '.pw-wrap .fi{padding-right:2.8rem}'
-    '.pw-eye{position:absolute;right:.85rem;top:50%;transform:translateY(-50%);'
-    'cursor:pointer;font-size:1.1rem;user-select:none;color:#888}'
-    '.pw-eye:hover{color:#667eea}'
     '.hn{font-size:.8rem;color:#888;margin-top:.3rem}'
     '.btn{padding:.75rem 1.5rem;border:none;border-radius:8px;cursor:pointer;font-size:.95rem;'
     'font-weight:600;transition:.2s;display:inline-flex;align-items:center;gap:.4rem}'
@@ -117,36 +145,6 @@ CSS = (
     '@media(max-width:600px){.tc{grid-template-columns:1fr}.hdr{justify-content:center}}'
 )
 
-# Глазик для поля пароля
-def eye(field_id):
-    return (
-        '<span class="pw-eye" '
-        'onclick="var f=document.getElementById(\'' + field_id + '\'),'
-        'this.textContent=f.type==\'password\'?\'&#128064;\':\'&#128065;\','
-        'f.type=f.type==\'password\'?\'text\':\'password\'">'
-        '&#128065;</span>'
-    )
-
-def pw_field(name, field_id, placeholder):
-    return (
-        '<div class="fg"><label>Пароль</label>'
-        '<div class="pw-wrap">'
-        '<input type="password" name="' + name + '" id="' + field_id + '" '
-        'class="fi" placeholder="' + placeholder + '" required>'
-        + eye(field_id) +
-        '</div></div>'
-    )
-
-def pw_field2(name, field_id, placeholder, label='Повторите пароль'):
-    return (
-        '<div class="fg"><label>' + label + '</label>'
-        '<div class="pw-wrap">'
-        '<input type="password" name="' + name + '" id="' + field_id + '" '
-        'class="fi" placeholder="' + placeholder + '" required>'
-        + eye(field_id) +
-        '</div></div>'
-    )
-
 def html(body, title='A/B Testing Pro'):
     return (
         '<!DOCTYPE html><html lang="ru"><head>'
@@ -154,6 +152,7 @@ def html(body, title='A/B Testing Pro'):
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
         '<title>' + title + '</title>'
         '<style>' + CSS + '</style>'
+        + EYE_JS +
         '</head><body>' + body + '</body></html>'
     )
 
@@ -204,7 +203,7 @@ def login():
         '<form method="POST">'
         '<div class="fg"><label>Email</label>'
         '<input type="email" name="email" class="fi" placeholder="your@email.com" required></div>'
-        + pw_field('password', 'pw_login', 'Ваш пароль') +
+        + pw_input('password', 'pw_login', 'Ваш пароль', 'Пароль') +
         '<button class="btn bp" style="width:100%">Войти</button>'
         '</form>'
         '<p class="al2" onclick="location=\'/register\'">Нет аккаунта? Зарегистрироваться</p>'
@@ -251,8 +250,8 @@ def register():
         '<div class="fg"><label>Email</label>'
         '<input type="email" name="email" class="fi" placeholder="your@email.com" required></div>'
         '<div class="tc">'
-        + pw_field('password', 'pw_reg1', 'Мин. 8 символов')
-        + pw_field2('confirm', 'pw_reg2', 'Повторите пароль')
+        + pw_input('password', 'pw_r1', 'Мин. 8 символов', 'Пароль')
+        + pw_input('confirm',  'pw_r2', 'Повторите пароль', 'Повторите пароль')
         + '</div>'
         '<button class="btn bp" style="width:100%">Создать аккаунт</button>'
         '</form>'
@@ -324,9 +323,8 @@ def api_keys():
         c += '<div class="fg"><label>Название магазина</label><input type="text" name="shop" class="fi" placeholder="Мой магазин" required maxlength="100"><div class="hn">Любое удобное название</div></div>'
         c += '<div class="fg"><label>Client ID</label><input type="text" name="cid" class="fi" placeholder="123456789" required maxlength="50"><div class="hn">Числовой ID из личного кабинета</div></div>'
         c += '</div>'
-        c += '<div class="fg"><label>API Key</label>'
-        c += '<div class="pw-wrap"><input type="password" name="akey" id="akey" class="fi" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" required maxlength="200">' + eye('akey') + '</div>'
-        c += '<div class="hn">Хранится безопасно. Показываются только последние 4 символа</div></div>'
+        c += pw_input('akey', 'akey', 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', 'API Key')
+        c += '<div class="hn" style="margin-top:-.8rem;margin-bottom:1rem">Хранится безопасно. Показываются только последние 4 символа</div>'
         c += '<button class="btn bp">Проверить и сохранить</button><span style="font-size:.85rem;color:#888;margin-left:1rem">Ключ будет проверен через API Озона</span></form>'
     else:
         c += alert('Достигнут лимит ' + str(MAX_KEYS) + ' ключей на аккаунт', 'wn')
