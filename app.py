@@ -453,6 +453,11 @@ def register():
             }
             session['email'] = email
             return redirect('/dashboard')
+    # Сохраняем введённые значения для подстановки обратно
+    saved_name  = clean(request.form.get('name', ''), 100) if request.method == 'POST' else ''
+    saved_email = clean(request.form.get('email', ''), 200) if request.method == 'POST' else ''
+    name_val  = ' value="' + saved_name  + '"' if saved_name  else ''
+    email_val = ' value="' + saved_email + '"' if saved_email else ''
     body = (
         '<div class="aw"><div class="ac">'
         '<h1>A/B Testing Pro</h1>'
@@ -460,9 +465,9 @@ def register():
         + alert(err, 'er') +
         '<form method="POST">'
         '<div class="fg"><label>Имя</label>'
-        '<input type="text" name="name" class="fi" placeholder="Иван Иванов" required maxlength="100"></div>'
+        '<input type="text" name="name" class="fi" placeholder="Иван Иванов" required maxlength="100"' + name_val + '></div>'
         '<div class="fg"><label>Email</label>'
-        '<input type="email" name="email" class="fi" placeholder="your@email.com" required></div>'
+        '<input type="email" name="email" class="fi" placeholder="your@email.com" required autocomplete="email"' + email_val + '></div>'
         + pw_input('password', 'pw_r1', 'Мин. 8 символов', 'Пароль')
         + pw_input('confirm', 'pw_r2', 'Повторите пароль', 'Повторите пароль')
         + '<button class="btn bp" style="width:100%">Создать аккаунт бесплатно</button>'
