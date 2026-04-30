@@ -545,7 +545,22 @@ def api_keys():
     c += alert(msg, 'ok')
     c += alert(err, 'er')
     c += '<div class="box"><h2>Добавить подключение</h2>'
-    c += '<div class="tip" style="margin-bottom:1.2rem">Где взять ключи: <a href="https://seller.ozon.ru/app/settings/api-keys" target="_blank" style="color:#1e40af;font-weight:600">seller.ozon.ru - Настройки - API ключи</a> - нажмите «Сгенерировать ключ»</div>'
+    c += ('<div class="tip" style="margin-bottom:1rem">'
+          '&#128273; <strong>Где взять ключи:</strong> '
+          '<a href="https://seller.ozon.ru/app/settings/api-keys" target="_blank" '
+          'style="color:#1e40af;font-weight:600">seller.ozon.ru &rarr; Настройки &rarr; API ключи</a> '
+          '&rarr; нажмите «Сгенерировать ключ»'
+          '</div>'
+          '<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:10px;padding:1.2rem;margin-bottom:1.2rem">'
+          '<p style="font-weight:700;margin-bottom:.8rem;color:#856404">&#9888; Какие права выбрать при создании ключа:</p>'
+          '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.6rem;margin-bottom:.8rem">'
+          '<div style="display:flex;align-items:flex-start;gap:.5rem;font-size:.9rem"><span style="color:#27ae60;font-weight:700;margin-top:.1rem">&#10003;</span><div><strong>Product</strong> &mdash; управление товарами и фото</div></div>'
+          '<div style="display:flex;align-items:flex-start;gap:.5rem;font-size:.9rem"><span style="color:#27ae60;font-weight:700;margin-top:.1rem">&#10003;</span><div><strong>Product read-only</strong> &mdash; чтение данных о товарах</div></div>'
+          '<div style="display:flex;align-items:flex-start;gap:.5rem;font-size:.9rem"><span style="color:#27ae60;font-weight:700;margin-top:.1rem">&#10003;</span><div><strong>Report</strong> &mdash; отчёты и статистика продаж</div></div>'
+          '<div style="display:flex;align-items:flex-start;gap:.5rem;font-size:.9rem"><span style="color:#27ae60;font-weight:700;margin-top:.1rem">&#10003;</span><div><strong>Warehouse</strong> &mdash; для проверки подключения</div></div>'
+          '</div>'
+          '<p style="font-size:.82rem;color:#888">&#128274; Всё остальное &mdash; финансы, заказы, FBS/FBO, возвраты &mdash; давать не нужно. Сервис это не использует.</p>'
+          '</div>')
     if len(keys) < MAX_KEYS:
         c += '<form method="POST" action="/api-keys/add"><div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">'
         c += '<div class="fg"><label>Название магазина</label><input type="text" name="shop" class="fi" placeholder="Мой магазин" required maxlength="100"><div class="hn">Любое удобное название</div></div>'
