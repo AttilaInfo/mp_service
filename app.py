@@ -249,11 +249,9 @@ def register():
         '<input type="text" name="name" class="fi" placeholder="Иван Иванов" required maxlength="100"></div>'
         '<div class="fg"><label>Email</label>'
         '<input type="email" name="email" class="fi" placeholder="your@email.com" required></div>'
-        '<div class="tc">'
         + pw_input('password', 'pw_r1', 'Мин. 8 символов', 'Пароль')
         + pw_input('confirm',  'pw_r2', 'Повторите пароль', 'Повторите пароль')
-        + '</div>'
-        '<button class="btn bp" style="width:100%">Создать аккаунт</button>'
+        + '<button class="btn bp" style="width:100%">Создать аккаунт</button>'
         '</form>'
         '<p class="al2" onclick="location=\'/login\'">Есть аккаунт? Войти</p>'
         '</div></div>'
