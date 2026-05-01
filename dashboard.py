@@ -572,16 +572,17 @@ def api_products():
                     name    = p.get('name', '')[:80]
                     if not name:
                         continue
-                    # Берём картинку из разных возможных полей
-                    imgs = p.get('images') or p.get('primary_image') or []
-                    if isinstance(imgs, list) and imgs:
-                        img = imgs[0] if isinstance(imgs[0], str) else ''
-                    elif isinstance(imgs, str):
-                        img = imgs
+                    # Главное фото: primary_image → первое в images
+                    img = ''
+                    primary = p.get('primary_image', '')
+                    if primary and isinstance(primary, str) and primary.startswith('http'):
+                        img = primary
                     else:
-                        # Fallback на CDN по product_id
-                        pid = str(p.get('id') or p.get('product_id', ''))
-                        img = f'https://cdn1.ozone.ru/s3/multimedia-{pid[-1]}/{pid}.jpg' if pid else ''
+                        imgs = p.get('images', [])
+                        if isinstance(imgs, list) and imgs:
+                            img = imgs[0] if isinstance(imgs[0], str) else ''
+                        elif isinstance(imgs, str) and imgs.startswith('http'):
+                            img = imgs
                     products.append({'sku': sku, 'ozon_id': ozon_id, 'name': name, 'img': img})
             _t.sleep(0.2)
 
