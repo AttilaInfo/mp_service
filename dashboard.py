@@ -385,21 +385,29 @@ def product_search_js():
 var ALL_PRODUCTS = [];
 var LOADED = false;
 
-function loadProducts() {
-  if (LOADED) return;
+function loadProducts(callback) {
+  if (LOADED) {
+    if (callback) callback();
+    return;
+  }
   var loading = document.getElementById('prod_loading');
   if (loading) loading.style.display = 'block';
+  var srch = document.getElementById('prod_search');
+  if (srch) srch.placeholder = 'Загружаем товары...';
   fetch('/api/products')
     .then(function(r){ return r.json(); })
     .then(function(data){
-      ALL_PRODUCTS = data;
+      ALL_PRODUCTS = Array.isArray(data) ? data : [];
       LOADED = true;
       if (loading) loading.style.display = 'none';
+      if (srch) srch.placeholder = 'Начните вводить название или артикул...';
       var hint = document.getElementById('prod_hint_text');
-      if (hint) hint.textContent = 'Загружено ' + data.length + ' товаров с остатками';
-      renderDropdown('');
+      if (hint) hint.textContent = 'Загружено ' + ALL_PRODUCTS.length + ' товаров с остатками';
+      if (callback) callback();
+      else renderDropdown(srch ? srch.value : '');
     }).catch(function(){
       if (loading) loading.style.display = 'none';
+      if (srch) srch.placeholder = 'Ошибка загрузки. Введите артикул и нажмите Найти';
     });
 }
 
@@ -482,8 +490,8 @@ document.addEventListener('DOMContentLoaded', function(){
   var srch = document.getElementById('prod_search');
   if (!srch) return;
   srch.addEventListener('focus', function(){
-    loadProducts();
-    setTimeout(function(){ renderDropdown(srch.value); }, 200);
+    var self = this;
+    loadProducts(function(){ renderDropdown(self.value); });
   });
   srch.addEventListener('input', function(){ renderDropdown(this.value); });
   document.addEventListener('click', function(e){
