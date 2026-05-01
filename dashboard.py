@@ -466,6 +466,13 @@ function selectProduct(sku, name, img) {
   document.getElementById('sku_result').innerHTML = '';
 }
 
+function clearSearch() {
+  var srch = document.getElementById('prod_search');
+  srch.value = '';
+  document.getElementById('prod_clear').style.display = 'none';
+  document.getElementById('prod_dropdown').style.display = 'none';
+  srch.focus();
+}
 function clearProduct() {
   document.getElementById('product_val').value = '';
   document.getElementById('prod_selected').style.display = 'none';
@@ -498,7 +505,11 @@ document.addEventListener('DOMContentLoaded', function(){
     var self = this;
     loadProducts(function(){ renderDropdown(self.value); });
   });
-  srch.addEventListener('input', function(){ renderDropdown(this.value); });
+  srch.addEventListener('input', function(){
+    var clr = document.getElementById('prod_clear');
+    if (clr) clr.style.display = this.value ? 'block' : 'none';
+    renderDropdown(this.value);
+  });
   document.addEventListener('click', function(e){
     var dd = document.getElementById('prod_dropdown');
     if (dd && !srch.contains(e.target) && !dd.contains(e.target)) {
@@ -675,13 +686,17 @@ def new_test():
         'Товар <span style="color:#27ae60;font-size:.85rem">(с остатками)</span>'
         '</label>'
         '<input type="hidden" name="product" id="product_val">'
-        '<div style="position:relative">'
+        '<div style="display:flex;gap:.5rem;align-items:center">'
+        '<div style="position:relative;flex:1">'
         '<input type="text" id="prod_search" class="fi" autocomplete="off" '
-        'placeholder="Начните вводить название или артикул..." style="padding-right:90px">'
+        'placeholder="Выберите карточку..." style="padding-right:2rem">'
+        '<button type="button" id="prod_clear" onclick="clearSearch()" '
+        'style="display:none;position:absolute;right:.5rem;top:50%;transform:translateY(-50%);'
+        'background:none;border:none;color:#aaa;cursor:pointer;font-size:1.2rem;padding:0;line-height:1">&times;</button>'
+        '</div>'
         '<button type="button" onclick="checkBySku()" '
-        'style="position:absolute;right:.4rem;top:50%;transform:translateY(-50%);'
-        'background:#667eea;color:#fff;border:none;border-radius:6px;'
-        'padding:.35rem .85rem;cursor:pointer;font-size:.82rem;font-weight:600">'
+        'style="background:#667eea;color:#fff;border:none;border-radius:8px;'
+        'padding:.75rem 1.2rem;cursor:pointer;font-size:.9rem;font-weight:600;white-space:nowrap">'
         '&#128269; Найти</button>'
         '</div>'
         '<div id="prod_dropdown" style="display:none;position:absolute;z-index:200;'
