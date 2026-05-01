@@ -590,6 +590,42 @@ def api_products():
     except Exception as e:
         return jsonify([])
 
+@dashboard_bp.route('/api/debug-product')
+def debug_product():
+    from flask import jsonify
+    u = me()
+    if not u:
+        return jsonify({})
+    keys = db.get_keys(u['id'])
+    key = next((k for k in keys if k['active']), None)
+    if not key:
+        return jsonify({})
+    hk = {'Client-Id': key['client_id'], 'Api-Key': key['api_key'], 'Content-Type': 'application/json'}
+    # Берём первый товар
+    r = req.post(f'{OZON_API_URL}/v3/product/list', headers=hk,
+        json={'filter': {'visibility': 'IN_SALE'}, 'last_id': '', 'limit': 1}, timeout=10)
+    if r.status_code != 200:
+        return jsonify({'error': r.status_code})
+    items = r.json().get('result', {}).get('items', [])
+    if not items:
+        return jsonify({'error': 'no items'})
+    pid = items[0]['product_id']
+    r2 = req.post(f'{OZON_API_URL}/v3/product/info/list', headers=hk,
+        json={'product_id': [pid]}, timeout=10)
+    if r2.status_code != 200:
+        return jsonify({'error': r2.status_code})
+    resp = r2.json()
+    p = ((resp.get('result') or {}).get('items') or resp.get('items') or [{}])[0]
+    # Возвращаем все поля связанные с картинками
+    return jsonify({
+        'primary_image':  p.get('primary_image'),
+        'images':         p.get('images'),
+        'images360':      p.get('images360'),
+        'color_image':    p.get('color_image'),
+        'all_keys':       [k for k in p.keys() if 'image' in k.lower() or 'photo' in k.lower() or 'pic' in k.lower()],
+    })
+
+
 @dashboard_bp.route('/api/check-sku')
 def check_sku():
     """Проверяет артикул через API Озона — есть ли товар и есть ли остатки."""
