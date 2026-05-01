@@ -98,9 +98,13 @@ def api_keys():
                 '<div style="display:flex;align-items:center;gap:.5rem">'
                 '<span class="dot ' + dot + '"></span>' + badge +
                 '</div>'
+                '<div style="display:flex;gap:.5rem">'
+                '<form method="POST" action="/api-keys/recheck/' + str(k['id']) + '">'
+                '<button class="btn bs" style="background:#e8f4fd;color:#1e40af;border:1px solid #bfdbfe">&#128260; Перепроверить</button>'
+                '</form>'
                 '<form method="POST" action="/api-keys/del/' + str(k['id']) + '">'
                 '<button class="btn bd bs" onclick="return confirm(\'Удалить?\')">Удалить</button>'
-                '</form></div>'
+                '</form></div></div>'
             )
     else:
         c += '<div class="empty"><p style="font-size:2rem">&#128273;</p><p style="margin-top:1rem">Нет добавленных ключей</p></div>'
@@ -135,6 +139,28 @@ def add_key():
     if ok:
         return redirect('/api-keys?msg=Магазин+' + shop + '+успешно+подключён')
     return redirect('/api-keys?err=Ключ+добавлен+но+проверка:+' + msg.replace(' ', '+'))
+
+
+@api_keys_bp.route('/api-keys/recheck/<int:key_id>', methods=['POST'])
+def recheck_key(key_id):
+    u = me()
+    if not u:
+        return redirect('/login')
+    keys = db.get_keys(u['id'])
+    key = next((k for k in keys if k['id'] == key_id), None)
+    if not key:
+        return redirect('/api-keys?err=Ключ+не+найден')
+    ok, msg = verify_ozon(key['client_id'], key['api_key'])
+    with db.get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                'UPDATE api_keys SET active=%s, check_msg=%s WHERE id=%s AND user_id=%s',
+                (ok, msg, key_id, u['id'])
+            )
+        conn.commit()
+    if ok:
+        return redirect('/api-keys?msg=Ключ+успешно+проверен')
+    return redirect('/api-keys?err=Проверка+не+прошла:+' + msg.replace(' ', '+'))
 
 
 @api_keys_bp.route('/api-keys/del/<int:key_id>', methods=['POST'])
