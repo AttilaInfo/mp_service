@@ -169,6 +169,15 @@ def debug_analytics():
         total = sum(row.get('metrics', [0])[0] or 0 for row in rows)
         results.append(f'Метрики {metrics}: статус={r.status_code}, строк={len(rows)}, сумма[0]={total}')
 
+    # Проверяем новый формат get_analytics
+    combined = get_analytics(active_key['client_id'], active_key['api_key'],
+        str(today - timedelta(days=7)), str(today))
+    results.append(f'get_analytics новый: строк={len(combined)}')
+    if combined:
+        results.append(f'Первая строка combined: {combined[0]}')
+        total = sum_metrics(combined)
+        results.append(f'Итого: views={total["views"]}, revenue={total["revenue"]}, orders={total["orders"]}')
+
     # Также проверим период
     r2 = req.post(
         f'{OZON_API_URL}/v1/analytics/data',
