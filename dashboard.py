@@ -572,17 +572,18 @@ def api_products():
                     name    = p.get('name', '')[:80]
                     if not name:
                         continue
-                    # Главное фото: primary_image → первое в images
+                    # primary_image — массив с главным фото
                     img = ''
-                    primary = p.get('primary_image', '')
-                    if primary and isinstance(primary, str) and primary.startswith('http'):
+                    primary = p.get('primary_image', [])
+                    if isinstance(primary, list) and primary:
+                        img = primary[0]
+                    elif isinstance(primary, str) and primary.startswith('http'):
                         img = primary
-                    else:
+                    # Если primary_image пустой — берём первое из images
+                    if not img:
                         imgs = p.get('images', [])
                         if isinstance(imgs, list) and imgs:
                             img = imgs[0] if isinstance(imgs[0], str) else ''
-                        elif isinstance(imgs, str) and imgs.startswith('http'):
-                            img = imgs
                     products.append({'sku': sku, 'ozon_id': ozon_id, 'name': name, 'img': img})
             _t.sleep(0.2)
 
