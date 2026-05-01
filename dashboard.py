@@ -73,6 +73,79 @@ def week_ranges(weeks=4):
     return result
 
 
+# ── Отладочный маршрут ────────────────────────────────────────────────────
+@dashboard_bp.route('/debug-analytics')
+def debug_analytics():
+    u = me()
+    if not u:
+        return redirect('/login')
+    keys = db.get_keys(u['id'])
+    active_key = next((k for k in keys if k['active']), None)
+    if not active_key:
+        return 'Нет активных ключей'
+
+    from datetime import datetime, timedelta
+    today = datetime.now().date()
+    date_from = str(today - timedelta(days=27))
+    date_to   = str(today)
+
+    import requests as req
+    headers = {
+        'Client-Id': active_key['client_id'],
+        'Api-Key':   active_key['api_key'],
+        'Content-Type': 'application/json'
+    }
+
+    results = []
+
+    # Пробуем разные варианты метрик
+    test_cases = [
+        ['hits_view_pdp', 'hits_tocart', 'revenue', 'ordered_units'],
+        ['hits_view', 'hits_tocart', 'revenue', 'ordered_units'],
+        ['revenue', 'ordered_units'],
+    ]
+
+    for metrics in test_cases:
+        r = req.post(
+            f'{OZON_API_URL}/v1/analytics/data',
+            headers=headers,
+            json={
+                'date_from': date_from,
+                'date_to': date_to,
+                'metrics': metrics,
+                'dimension': ['day'],
+                'limit': 7
+            },
+            timeout=10
+        )
+        data = r.json()
+        rows = data.get('result', {}).get('data', [])
+        # Суммируем первую метрику
+        total = sum(row.get('metrics', [0])[0] or 0 for row in rows)
+        results.append(f'Метрики {metrics}: статус={r.status_code}, строк={len(rows)}, сумма[0]={total}')
+
+    # Также проверим период
+    r2 = req.post(
+        f'{OZON_API_URL}/v1/analytics/data',
+        headers=headers,
+        json={
+            'date_from': str(today - timedelta(days=7)),
+            'date_to': str(today),
+            'metrics': ['revenue', 'ordered_units'],
+            'dimension': ['day'],
+            'limit': 7
+        },
+        timeout=10
+    )
+    d2 = r2.json()
+    rows2 = d2.get('result', {}).get('data', [])
+    results.append(f'Последние 7 дней: статус={r2.status_code}, строк={len(rows2)}')
+    if rows2:
+        results.append(f'Первая строка: {rows2[0]}')
+
+    return '<br>'.join(results)
+
+
 # ── Дашборд ────────────────────────────────────────────────────────────────
 @dashboard_bp.route('/dashboard')
 def dashboard():
