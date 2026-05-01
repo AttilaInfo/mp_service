@@ -514,37 +514,45 @@ def api_products():
     all_items = []
     last_id = ''
     try:
-        while len(all_items) < 2000:
-            r = req.post(f'{OZON_API_URL}/v3/product/list', headers=hk,
-                json={'filter': {'visibility': 'IN_SALE'}, 'last_id': last_id, 'limit': 1000},
-                timeout=15)
-            if r.status_code != 200:
-                return jsonify({'error': f'product/list status {r.status_code}', 'data': []})
-            result = r.json().get('result', {})
-            items  = result.get('items', [])
-            all_items.extend(items)
-            last_id = result.get('last_id', '')
-            if not last_id or len(items) < 1000:
-                break
-            _t.sleep(0.3)
-        products = []
-        for i in range(0, min(len(all_items), 2000), 100):
-            batch = all_items[i:i+100]
-            r2 = req.post(f'{OZON_API_URL}/v2/product/info/list', headers=hk,
-                json={'product_id': [int(x['product_id']) for x in batch]}, timeout=15)
-            if r2.status_code == 200:
-                for p in r2.json().get('result', {}).get('items', []):
-                    images = p.get('images', [])
-                    img = images[0] if images and isinstance(images[0], str) else ''
-                    products.append({
-                        'sku':  p.get('offer_id', ''),
-                        'name': p.get('name', '')[:80],
-                        'img':  img
-                    })
-            _t.sleep(0.2)
-        return jsonify(products)
+        # Пробуем без фильтра сначала - берём первые 100 товаров для теста
+        r = req.post(f'{OZON_API_URL}/v3/product/list', headers=hk,
+            json={'filter': {}, 'last_id': '', 'limit': 100},
+            timeout=15)
+        if r.status_code != 200:
+            return jsonify({'error': f'list {r.status_code}: {r.text[:200]}'})
+
+        result = r.json().get('result', {})
+        all_items = result.get('items', [])
+
+        if not all_items:
+            return jsonify({'debug': 'no items', 'raw': str(r.json())[:500]})
+
+        # Получаем детали первых 20 товаров
+        batch = all_items[:20]
+        r2 = req.post(f'{OZON_API_URL}/v2/product/info/list', headers=hk,
+            json={'product_id': [int(x['product_id']) for x in batch]}, timeout=15)
+
+        if r2.status_code != 200:
+            return jsonify({'error': f'info/list {r2.status_code}: {r2.text[:200]}'})
+
+        raw_items = r2.json().get('result', {}).get('items', [])
+        if raw_items:
+            # Показываем первый товар для отладки
+            first = raw_items[0]
+            return jsonify({
+                'debug': True,
+                'total_ids': len(all_items),
+                'first_product': {
+                    'name': first.get('name',''),
+                    'offer_id': first.get('offer_id',''),
+                    'images_key': list(first.keys()),
+                    'images': first.get('images',''),
+                    'primary_image': first.get('primary_image',''),
+                }
+            })
+        return jsonify({'debug': 'got items but empty', 'count': len(raw_items)})
     except Exception as e:
-        return jsonify({'error': str(e), 'data': []})
+        return jsonify({'error': str(e)})
 
 
 @dashboard_bp.route('/api/check-sku')
