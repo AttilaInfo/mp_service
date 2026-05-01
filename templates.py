@@ -6,6 +6,8 @@ APP_CSS = (
     '.hdr{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:1rem 2rem;'
     'display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.8rem;box-shadow:0 2px 8px rgba(0,0,0,.2)}'
     '.hdr h1{font-size:1.4rem;font-weight:700}'
+    '.hdr h1 a{color:#fff;text-decoration:none}'
+    '.hdr h1 a:hover{opacity:.85}'
     '.hdr nav{display:flex;gap:.5rem;flex-wrap:wrap}'
     '.nb{padding:.5rem 1rem;border-radius:8px;background:rgba(255,255,255,.15);color:#fff;'
     'border:1px solid rgba(255,255,255,.3);font-size:.9rem;transition:.2s;text-decoration:none}'
@@ -233,7 +235,7 @@ def nav_bar(active_page):
         cls = 'nb on' if active_page == pg else 'nb'
         items += '<a href="{}" class="{}">{}</a>'.format(url, cls, label)
     items += '<a href="/logout" class="nb">Выход</a>'
-    return '<div class="hdr"><h1>A/B Testing Pro</h1><nav>' + items + '</nav></div>'
+    return '<div class="hdr"><h1><a href="/dashboard">A/B Testing Pro</a></h1><nav>' + items + '</nav></div>'
 
 
 def render(content, page='', logged=True):
