@@ -521,6 +521,7 @@ def api_products():
     hk = {'Client-Id': key['client_id'], 'Api-Key': key['api_key'], 'Content-Type': 'application/json'}
     all_items = []
     last_id = ''
+    import time as _t
     try:
         # Шаг 1: получаем ID товаров в продаже
         while len(all_items) < 2000:
@@ -537,6 +538,9 @@ def api_products():
                 break
             _t.sleep(0.3)
 
+        if not all_items:
+            return jsonify([])
+
         # Шаг 2: получаем детали пачками по 100
         products = []
         for i in range(0, min(len(all_items), 2000), 100):
@@ -544,20 +548,15 @@ def api_products():
             r2 = req.post(f'{OZON_API_URL}/v3/product/info/list', headers=hk,
                 json={'product_id': [int(x['product_id']) for x in batch]}, timeout=15)
             if r2.status_code == 200:
-                resp  = r2.json()
+                resp   = r2.json()
                 items2 = (resp.get('result') or {}).get('items') or resp.get('items') or []
                 for p in items2:
-                    pid = p.get('id') or p.get('product_id', '')
-                    # Картинка из CDN Озона
-                    img = ''
-                    if pid:
-                        s = str(pid)
-                        img = f'https://cdn1.ozone.ru/s3/multimedia-{s[-1]}/{pid}.jpg'
-                    products.append({
-                        'sku':  p.get('offer_id', ''),
-                        'name': p.get('name', '')[:80],
-                        'img':  img
-                    })
+                    pid = str(p.get('id') or p.get('product_id', ''))
+                    img = f'https://cdn1.ozone.ru/s3/multimedia-{pid[-1]}/{pid}.jpg' if pid else ''
+                    sku  = p.get('offer_id', '')
+                    name = p.get('name', '')[:80]
+                    if sku and name:
+                        products.append({'sku': sku, 'name': name, 'img': img})
             _t.sleep(0.2)
 
         return jsonify(products)
