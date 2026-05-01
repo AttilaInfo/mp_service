@@ -12,40 +12,53 @@ dashboard_bp = Blueprint('dashboard', __name__)
 
 def get_analytics(client_id, api_key, date_from, date_to):
     """Получить аналитику с Озона за период."""
-    try:
-        r = req.post(
-            f'{OZON_API_URL}/v1/analytics/data',
-            headers={
-                'Client-Id': client_id,
-                'Api-Key': api_key,
-                'Content-Type': 'application/json'
-            },
-            json={
-                'date_from': date_from,
-                'date_to': date_to,
-                'metrics': ['hits_view_pdp', 'hits_tocart', 'revenue', 'ordered_units'],
-                'dimension': ['day'],
-                'limit': 100
-            },
-            timeout=10
-        )
-        if r.status_code == 200:
-            return r.json().get('result', {}).get('data', [])
-        return []
-    except Exception:
-        return []
+    headers = {
+        'Client-Id': client_id,
+        'Api-Key': api_key,
+        'Content-Type': 'application/json'
+    }
+    # Пробуем с просмотрами
+    for metrics in [
+        ['hits_view_pdp', 'hits_tocart', 'revenue', 'ordered_units'],
+        ['revenue', 'ordered_units'],
+    ]:
+        try:
+            r = req.post(
+                f'{OZON_API_URL}/v1/analytics/data',
+                headers=headers,
+                json={
+                    'date_from': date_from,
+                    'date_to': date_to,
+                    'metrics': metrics,
+                    'dimension': ['day'],
+                    'limit': 1000
+                },
+                timeout=10
+            )
+            if r.status_code == 200:
+                rows = r.json().get('result', {}).get('data', [])
+                if rows:
+                    # Запоминаем сколько метрик вернулось
+                    return rows, len(metrics)
+        except Exception:
+            pass
+    return [], 0
 
 
-def sum_metrics(rows):
+def sum_metrics(rows, metric_count=4):
     """Суммировать метрики по списку строк."""
     views = clicks = revenue = orders = 0
     for row in rows:
         m = row.get('metrics', [])
-        if len(m) >= 4:
-            views   += m[0] or 0
-            clicks  += m[1] or 0
-            revenue += m[2] or 0
-            orders  += m[3] or 0
+        if metric_count == 4:
+            views   += (m[0] or 0) if len(m) > 0 else 0
+            clicks  += (m[1] or 0) if len(m) > 1 else 0
+            revenue += (m[2] or 0) if len(m) > 2 else 0
+            orders  += (m[3] or 0) if len(m) > 3 else 0
+        else:
+            # только revenue и ordered_units
+            revenue += (m[0] or 0) if len(m) > 0 else 0
+            orders  += (m[1] or 0) if len(m) > 1 else 0
     conv = round((orders / views * 100), 2) if views > 0 else 0
     return {
         'views':   int(views),
@@ -179,16 +192,16 @@ def dashboard():
     date_from_all = str(today - timedelta(days=27))
     date_to_all   = str(today)
 
-    all_rows = get_analytics(active_key['client_id'], active_key['api_key'], date_from_all, date_to_all)
+    all_rows, metric_count = get_analytics(active_key['client_id'], active_key['api_key'], date_from_all, date_to_all)
 
     # Суммарные метрики за 4 недели
-    total = sum_metrics(all_rows)
+    total = sum_metrics(all_rows, metric_count)
 
     # Метрики по неделям
     weekly = []
     for label, wfrom, wto in weeks:
-        wrows = [r for r in all_rows if wfrom <= r.get('dimensions', [{}])[0].get('id', '')[:10] <= wto]
-        weekly.append({'label': label, **sum_metrics(wrows)})
+        wrows = [r for r in all_rows if wfrom <= (r.get('dimensions') or [{}])[0].get('id', '')[:10] <= wto]
+        weekly.append({'label': label, **sum_metrics(wrows, metric_count)})
 
     # ── Карточки метрик ────────────────────────────────────────────────────
     c = '<p class="ttl">Привет, ' + u['name'] + '! <span style="font-size:1rem;color:#888;font-weight:400">Статистика за 4 недели</span></p>'
