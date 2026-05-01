@@ -478,37 +478,58 @@ def new_test():
         for k in active_keys
     )
 
-    # Строим список товаров с остатками + поле ручного ввода SKU
-    if products:
-        prod_opts = '<option value="">— Выберите товар из списка —</option>' + ''.join(
-            '<option value="{sku}|{name}">{name} (SKU: {sku})</option>'.format(
-                sku=p.get('offer_id', ''),
-                name=p.get('name', 'Без названия')[:70]
-            )
-            for p in products
-        )
-        prod_count = len(products)
-        prod_block = (
-            '<select name="product" id="product_select" class="fi" onchange="onSelectProduct(this)">'
-            + prod_opts + '</select>'
-            '<div style="text-align:center;color:#888;font-size:.85rem;margin:.5rem 0">или введите SKU вручную</div>'
-            '<div style="display:flex;gap:.5rem">'
-            '<input type="text" id="manual_sku" class="fi" placeholder="Введите SKU товара" style="flex:1">'
-            '<button type="button" onclick="checkManualSku()" class="btn bp" style="white-space:nowrap">Найти</button>'
-            '</div>'
-            '<div id="sku_check_result" style="margin-top:.5rem;font-size:.85rem"></div>'
-        )
-        prod_hint = (
-            f'Загружено {prod_count} товаров с остатками. '
-            'Если нужного товара нет — введите SKU вручную для проверки.'
-        )
+    # Готовим данные товаров для JS-поиска
+    import json as _json
+    prod_count = len(products)
+
+    # Список товаров для JS (SKU, название, картинка)
+    js_products = []
+    for p in products:
+        images = p.get('images', []) or p.get('primary_image', '')
+        img = ''
+        if isinstance(images, list) and images:
+            img = images[0] if isinstance(images[0], str) else ''
+        elif isinstance(images, str):
+            img = images
+        js_products.append({
+            'sku':  p.get('offer_id', ''),
+            'name': p.get('name', 'Без названия')[:80],
+            'img':  img
+        })
+
+    js_data = _json.dumps(js_products, ensure_ascii=False)
+
+    if prod_count > 0:
+        prod_hint = f'Загружено {prod_count} товаров с остатками. Начните вводить название или артикул.'
     else:
-        prod_block = (
-            '<input type="text" name="product" id="manual_sku_only" class="fi" '
-            'placeholder="Введите SKU товара" required>'
-        )
-        prod_hint = 'Не удалось загрузить список — введите SKU вручную'
-        prod_count = 0
+        prod_hint = 'Не удалось загрузить список. Введите SKU вручную — нажмите «Найти» для проверки.'
+
+    prod_block = (
+        # Скрытое поле с выбранным товаром
+        '<input type="hidden" name="product" id="product_val">'
+        # Поле поиска
+        '<div style="position:relative">'
+        '<input type="text" id="prod_search" class="fi" autocomplete="off" '
+        'placeholder="Введите название, артикул или SKU..." '
+        'oninput="searchProducts(this.value)" onfocus="searchProducts(this.value)">'
+        # Кнопка найти по SKU если нет в списке
+        '<button type="button" onclick="checkBySku()" '
+        'style="position:absolute;right:.5rem;top:50%;transform:translateY(-50%);'
+        'background:#667eea;color:#fff;border:none;border-radius:6px;'
+        'padding:.3rem .8rem;cursor:pointer;font-size:.82rem">Найти</button>'
+        '</div>'
+        # Выпадающий список результатов
+        '<div id="prod_dropdown" style="display:none;position:absolute;z-index:100;'
+        'background:#fff;border:1px solid #e0e0e0;border-radius:8px;'
+        'box-shadow:0 4px 16px rgba(0,0,0,.12);max-height:320px;overflow-y:auto;'
+        'width:calc(100% - 3rem);margin-top:.2rem"></div>'
+        # Выбранный товар
+        '<div id="prod_selected" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;'
+        'border-radius:8px;padding:.75rem 1rem;margin-top:.5rem;'
+        'display:flex;align-items:center;gap:.75rem"></div>'
+        # Результат проверки SKU
+        '<div id="sku_result" style="font-size:.85rem;margin-top:.4rem"></div>'
+    )
 
     c = (
         '<div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem">'
@@ -523,7 +544,7 @@ def new_test():
         '<div class="fg"><label>Магазин</label>'
         f'<select name="key_id" class="fi" required>{shops_opts}</select></div>'
 
-        '<div class="fg"><label>Товар <span style="color:#27ae60;font-size:.85rem">(с остатками)</span></label>'
+        '<div class="fg" style="position:relative"><label>Товар <span style="color:#27ae60;font-size:.85rem">(с остатками)</span></label>'
         + prod_block +
         '<div class="hn">' + prod_hint + '</div></div>'
 
@@ -546,36 +567,58 @@ def new_test():
         '</form></div>'
 
         '<script>'
-        'function onSelectProduct(sel) {'
-        '  document.getElementById("manual_sku").value = sel.value.split("|")[0] || "";'
-        '}'
-        'function checkManualSku() {'
-        '  var sku = document.getElementById("manual_sku").value.trim();'
-        '  if (!sku) return;'
-        '  var res = document.getElementById("sku_check_result");'
-        '  res.innerHTML = "&#128269; Проверяем...";'
-        '  fetch("/api/check-sku?sku=" + encodeURIComponent(sku))'
-        '    .then(r => r.json())'
-        '    .then(d => {'
-        '      if (d.found && d.has_stock) {'
-        '        res.innerHTML = "<span style=color:#27ae60>&#10003; Товар найден: " + d.name + "</span>";'
-        '        // Добавляем скрытый input с выбранным товаром'
-        '        var old = document.getElementById("manual_product_val");'
-        '        if (old) old.remove();'
-        '        var inp = document.createElement("input");'
-        '        inp.type="hidden"; inp.name="product"; inp.id="manual_product_val";'
-        '        inp.value = sku + "|" + d.name;'
-        '        document.getElementById("manual_sku").parentElement.parentElement.appendChild(inp);'
-        '      } else if (d.found && !d.has_stock) {'
-        '        res.innerHTML = "<span style=color:#e67e22>&#9888; Товар найден, но нет остатков. "+'
-        '          "Пополните остатки на FBS — и товар появится в списке для тестирования.</span>";'
-        '      } else {'
-        '        res.innerHTML = "<span style=color:#e74c3c>&#10007; Товар с таким SKU не найден</span>";'
-        '      }'
-        '    }).catch(() => { res.innerHTML = "Ошибка проверки"; });'
-        '}'
-        'var sel = document.getElementById("product_select");'
-        'if (sel) sel.addEventListener("change", function() { onSelectProduct(sel); });'
+        'var PRODUCTS = ' + js_data + ';'
+        'function searchProducts(q) {'\
+        '  var dd = document.getElementById("prod_dropdown");'\
+        '  if (!q || q.length < 1) { dd.style.display="none"; return; }'\
+        '  var ql = q.toLowerCase();'\
+        '  var matches = PRODUCTS.filter(function(p) {'\
+        '    return p.sku.toLowerCase().includes(ql) || p.name.toLowerCase().includes(ql);'\
+        '  }).slice(0, 20);'\
+        '  if (!matches.length) { dd.innerHTML="<div style=padding:.8rem;color:#888>Ничего не найдено. Попробуйте «Найти» для проверки по SKU.</div>"; dd.style.display="block"; return; }'\
+        '  dd.innerHTML = matches.map(function(p) {'\
+        '    var img = p.img ? "<img src=\\""+p.img+"\\" style=\\"width:40px;height:40px;object-fit:cover;border-radius:4px;flex-shrink:0\\">" : "<div style=\\"width:40px;height:40px;background:#f0f2f5;border-radius:4px;flex-shrink:0\\"></div>";'\
+        '    return "<div onclick=\\"selectProduct(\'"+p.sku+"\',\'"+p.name.replace(/\'/g,\"\\")+"\',\'"+p.img+"\')\\""'\
+        '         + " style=\\"display:flex;align-items:center;gap:.75rem;padding:.7rem 1rem;cursor:pointer;border-bottom:1px solid #f5f5f5\\""\'\n'\
+        '         + " onmouseover=\\"this.style.background=\'#f8f9fa\'\\" onmouseout=\\"this.style.background=\'\'\\">"\n'\
+        '         + img + "<div><div style=\\"font-size:.9rem;font-weight:600\\">"+p.name+"</div><div style=\\"font-size:.78rem;color:#888\\">SKU: "+p.sku+"</div></div></div>";'\
+        '  }).join("");'\
+        '  dd.style.display="block";'\
+        '}'\
+        'function selectProduct(sku, name, img) {'\
+        '  document.getElementById("product_val").value = sku + "|" + name;'\
+        '  document.getElementById("prod_search").value = name + " (SKU: " + sku + ")";'\
+        '  document.getElementById("prod_dropdown").style.display = "none";'\
+        '  var img_tag = img ? "<img src=\\""+img+"\\" style=\\"width:48px;height:48px;object-fit:cover;border-radius:6px\\">" : "";'\
+        '  var sel = document.getElementById("prod_selected");'\
+        '  sel.innerHTML = img_tag + "<div><strong>" + name + "</strong><div style=\\"font-size:.82rem;color:#666\\">SKU: " + sku + "</div></div>";'\
+        '  sel.style.display = "flex";'\
+        '  document.getElementById("sku_result").innerHTML = "";'\
+        '}'\
+        'function checkBySku() {'\
+        '  var sku = document.getElementById("prod_search").value.trim();'\
+        '  if (!sku) return;'\
+        '  var res = document.getElementById("sku_result");'\
+        '  res.innerHTML = "&#128269; Проверяем...";'\
+        '  fetch("/api/check-sku?sku=" + encodeURIComponent(sku))'\
+        '    .then(function(r){return r.json();})'\
+        '    .then(function(d) {'\
+        '      if (d.found && d.has_stock) {'\
+        '        selectProduct(d.sku, d.name, "");'\
+        '        res.innerHTML = "<span style=color:#27ae60>&#10003; Товар найден и добавлен</span>";'\
+        '      } else if (d.found && !d.has_stock) {'\
+        '        res.innerHTML = "<span style=color:#e67e22>&#9888; Товар найден, но нет остатков. Пополните остатки на FBS — товар появится в списке.</span>";'\
+        '      } else {'\
+        '        res.innerHTML = "<span style=color:#e74c3c>&#10007; Товар с таким SKU не найден в вашем магазине</span>";'\
+        '      }'\
+        '    }).catch(function(){ res.innerHTML = "Ошибка проверки"; });'\
+        '}'\
+        'document.addEventListener("click", function(e) {'\
+        '  if (!e.target.closest || !e.target.closest("#prod_search")) {'\
+        '    var dd = document.getElementById("prod_dropdown");'\
+        '    if (dd) dd.style.display="none";'\
+        '  }'\
+        '});'\
         '</script>'
         '<script>'
         'function updateVariants() {'
