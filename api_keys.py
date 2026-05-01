@@ -187,7 +187,7 @@ def test_key(key_id):
 
     # 1. Список товаров
     try:
-        r = req.post(f'{OZON_API_URL}/v2/product/list',
+        r = req.post(f'{OZON_API_URL}/v3/product/list',
             headers=headers,
             json={'filter': {}, 'last_id': '', 'limit': 5},
             timeout=8)
@@ -202,7 +202,7 @@ def test_key(key_id):
 
     # 2. Информация о складах
     try:
-        r = req.post(f'{OZON_API_URL}/v1/warehouse/list',
+        r = req.post(f'{OZON_API_URL}/v2/warehouse/list',
             headers=headers, json={}, timeout=8)
         if r.status_code == 200:
             wh = r.json().get('result', [])
