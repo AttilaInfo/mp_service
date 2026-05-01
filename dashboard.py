@@ -466,6 +466,15 @@ function selectProduct(sku, name, img) {
   document.getElementById('sku_result').innerHTML = '';
 }
 
+function toggleSkuSearch() {
+  var wrap = document.getElementById('sku_search_wrap');
+  if (!wrap) return;
+  wrap.style.display = wrap.style.display === 'none' || wrap.style.display === '' ? 'block' : 'none';
+  if (wrap.style.display === 'block') {
+    var inp = document.getElementById('sku_manual');
+    if (inp) inp.focus();
+  }
+}
 function clearSearch() {
   var srch = document.getElementById('prod_search');
   srch.value = '';
@@ -480,7 +489,8 @@ function clearProduct() {
 }
 
 function checkBySku() {
-  var sku = document.getElementById('prod_search').value.trim();
+  var manualInp = document.getElementById('sku_manual');
+  var sku = (manualInp ? manualInp.value : document.getElementById('prod_search').value).trim();
   if (!sku) return;
   var res = document.getElementById('sku_result');
   res.innerHTML = '&#128269; Проверяем...';
@@ -724,19 +734,26 @@ def new_test():
         'Товар <span style="color:#27ae60;font-size:.85rem">(с остатками)</span>'
         '</label>'
         '<input type="hidden" name="product" id="product_val">'
-        '<div style="display:flex;gap:.5rem;align-items:center">'
-        '<div style="position:relative;flex:1">'
+        '<div style="position:relative">'
         '<input type="text" id="prod_search" class="fi" autocomplete="off" '
         'placeholder="Выберите карточку..." style="padding-right:2rem">'
         '<button type="button" id="prod_clear" onclick="clearSearch()" '
         'style="display:none;position:absolute;right:.5rem;top:50%;transform:translateY(-50%);'
         'background:none;border:none;color:#aaa;cursor:pointer;font-size:1.2rem;padding:0;line-height:1">&times;</button>'
         '</div>'
+        '<div style="margin-top:.4rem">'
+        '<span onclick="toggleSkuSearch()" '
+        'style="font-size:.82rem;color:#667eea;cursor:pointer;text-decoration:underline">'
+        'Не нашли товар? Найти по артикулу</span>'
+        '</div>'
+        '<div id="sku_search_wrap" style="display:none;margin-top:.5rem;display:none">'
+        '<div style="display:flex;gap:.5rem">'
+        '<input type="text" id="sku_manual" class="fi" placeholder="Введите артикул продавца или SKU Озона">'
         '<button type="button" onclick="checkBySku()" '
         'style="background:#667eea;color:#fff;border:none;border-radius:8px;'
         'padding:.75rem 1.2rem;cursor:pointer;font-size:.9rem;font-weight:600;white-space:nowrap">'
-        '&#128269; Найти</button>'
-        '</div>'
+        'Найти</button>'
+        '</div></div>'
         '<div id="prod_dropdown" style="display:none;position:absolute;z-index:200;'
         'background:#fff;border:1px solid #ddd;border-radius:10px;'
         'box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:350px;overflow-y:auto;'
