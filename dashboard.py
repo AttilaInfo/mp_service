@@ -502,7 +502,6 @@ document.addEventListener('DOMContentLoaded', function(){
 def api_products():
     """Загрузка товаров с остатками для формы создания теста."""
     from flask import jsonify
-    import time as _t
     u = me()
     if not u:
         return jsonify([])
@@ -510,61 +509,52 @@ def api_products():
     key  = next((k for k in keys if k['active']), None)
     if not key:
         return jsonify([])
+
     hk = {'Client-Id': key['client_id'], 'Api-Key': key['api_key'], 'Content-Type': 'application/json'}
     all_items = []
     last_id = ''
     try:
-        # Пробуем без фильтра сначала - берём первые 100 товаров для теста
-        r = req.post(f'{OZON_API_URL}/v3/product/list', headers=hk,
-            json={'filter': {}, 'last_id': '', 'limit': 100},
-            timeout=15)
-        if r.status_code != 200:
-            return jsonify({'error': f'list {r.status_code}: {r.text[:200]}'})
-
-        result = r.json().get('result', {})
-        all_items = result.get('items', [])
-
-        if not all_items:
-            return jsonify({'debug': 'no items', 'raw': str(r.json())[:500]})
-
-        # Собираем полный список постранично
+        # Шаг 1: получаем ID товаров в продаже
         while len(all_items) < 2000:
-            r_next = req.post(f'{OZON_API_URL}/v3/product/list', headers=hk,
-                json={'filter': {'visibility': 'IN_SALE'}, 'last_id': result.get('last_id',''), 'limit': 1000},
+            r = req.post(f'{OZON_API_URL}/v3/product/list', headers=hk,
+                json={'filter': {'visibility': 'IN_SALE'}, 'last_id': last_id, 'limit': 1000},
                 timeout=15)
-            if r_next.status_code != 200:
+            if r.status_code != 200:
                 break
-            res_next = r_next.json().get('result', {})
-            more = res_next.get('items', [])
-            all_items.extend(more)
-            if not res_next.get('last_id') or len(more) < 1000:
+            result = r.json().get('result', {})
+            items  = result.get('items', [])
+            all_items.extend(items)
+            last_id = result.get('last_id', '')
+            if not last_id or len(items) < 1000:
                 break
             _t.sleep(0.3)
 
-        # Получаем названия через v3/product/info/list (возвращает items напрямую)
+        # Шаг 2: получаем детали пачками по 100
         products = []
         for i in range(0, min(len(all_items), 2000), 100):
             batch = all_items[i:i+100]
             r2 = req.post(f'{OZON_API_URL}/v3/product/info/list', headers=hk,
                 json={'product_id': [int(x['product_id']) for x in batch]}, timeout=15)
             if r2.status_code == 200:
-                # v3 возвращает items напрямую или через result
-                resp = r2.json()
+                resp  = r2.json()
                 items2 = (resp.get('result') or {}).get('items') or resp.get('items') or []
                 for p in items2:
-                    # Картинки через отдельный запрос не нужны — используем CDN Озона
                     pid = p.get('id') or p.get('product_id', '')
+                    # Картинка из CDN Озона
+                    img = ''
+                    if pid:
+                        s = str(pid)
+                        img = f'https://cdn1.ozone.ru/s3/multimedia-{s[-1]}/{pid}.jpg'
                     products.append({
                         'sku':  p.get('offer_id', ''),
                         'name': p.get('name', '')[:80],
-                        'img':  f'https://cdn1.ozone.ru/s3/multimedia-{str(pid)[-1]}/{pid}.jpg' if pid else ''
+                        'img':  img
                     })
             _t.sleep(0.2)
 
         return jsonify(products)
     except Exception as e:
-        return jsonify({'error': str(e)})
-
+        return jsonify([])
 
 @dashboard_bp.route('/api/check-sku')
 def check_sku():
