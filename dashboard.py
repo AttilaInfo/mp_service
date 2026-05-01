@@ -11,54 +11,86 @@ dashboard_bp = Blueprint('dashboard', __name__)
 
 
 def get_analytics(client_id, api_key, date_from, date_to):
-    """Получить аналитику с Озона за период."""
+    """Получить аналитику с Озона за период. Два запроса: трафик + продажи."""
     headers = {
         'Client-Id': client_id,
         'Api-Key': api_key,
         'Content-Type': 'application/json'
     }
-    # Пробуем с просмотрами
-    for metrics in [
-        ['hits_view_pdp', 'hits_tocart', 'revenue', 'ordered_units'],
-        ['revenue', 'ordered_units'],
-    ]:
-        try:
-            r = req.post(
-                f'{OZON_API_URL}/v1/analytics/data',
-                headers=headers,
-                json={
-                    'date_from': date_from,
-                    'date_to': date_to,
-                    'metrics': metrics,
-                    'dimension': ['day'],
-                    'limit': 1000
-                },
-                timeout=10
-            )
-            if r.status_code == 200:
-                rows = r.json().get('result', {}).get('data', [])
-                if rows:
-                    # Запоминаем сколько метрик вернулось
-                    return rows, len(metrics)
-        except Exception:
-            pass
-    return [], 0
+    base = {
+        'date_from': date_from,
+        'date_to': date_to,
+        'dimension': ['day'],
+        'limit': 1000
+    }
+
+    # Запрос 1: просмотры и клики
+    rows_traffic = []
+    try:
+        r = req.post(f'{OZON_API_URL}/v1/analytics/data', headers=headers,
+            json={**base, 'metrics': ['hits_view_pdp', 'hits_tocart']}, timeout=10)
+        if r.status_code == 200:
+            rows_traffic = r.json().get('result', {}).get('data', [])
+    except Exception:
+        pass
+
+    # Запрос 2: выручка и заказы
+    rows_sales = []
+    try:
+        r = req.post(f'{OZON_API_URL}/v1/analytics/data', headers=headers,
+            json={**base, 'metrics': ['revenue', 'ordered_units']}, timeout=10)
+        if r.status_code == 200:
+            rows_sales = r.json().get('result', {}).get('data', [])
+    except Exception:
+        pass
+
+    # Объединяем по дате
+    sales_by_date = {}
+    for row in rows_sales:
+        date = (row.get('dimensions') or [{}])[0].get('id', '')[:10]
+        m = row.get('metrics', [])
+        sales_by_date[date] = {
+            'revenue': (m[0] or 0) if len(m) > 0 else 0,
+            'orders':  (m[1] or 0) if len(m) > 1 else 0,
+        }
+
+    # Строим объединённые строки
+    combined = []
+    for row in rows_traffic:
+        date = (row.get('dimensions') or [{}])[0].get('id', '')[:10]
+        m = row.get('metrics', [])
+        s = sales_by_date.get(date, {'revenue': 0, 'orders': 0})
+        combined.append({
+            'date': date,
+            'views':   int((m[0] or 0) if len(m) > 0 else 0),
+            'clicks':  int((m[1] or 0) if len(m) > 1 else 0),
+            'revenue': float(s['revenue']),
+            'orders':  int(s['orders']),
+        })
+
+    # Если трафика нет — берём только продажи
+    if not combined and rows_sales:
+        for row in rows_sales:
+            date = (row.get('dimensions') or [{}])[0].get('id', '')[:10]
+            m = row.get('metrics', [])
+            combined.append({
+                'date': date,
+                'views': 0, 'clicks': 0,
+                'revenue': float((m[0] or 0) if len(m) > 0 else 0),
+                'orders':  int((m[1] or 0) if len(m) > 1 else 0),
+            })
+
+    return combined
 
 
 def sum_metrics(rows, metric_count=4):
-    """Суммировать метрики по списку строк."""
+    """Суммировать метрики по списку строк (новый формат — dict)."""
     views = clicks = revenue = orders = 0
     for row in rows:
-        m = row.get('metrics', [])
-        if metric_count == 4:
-            views   += (m[0] or 0) if len(m) > 0 else 0
-            clicks  += (m[1] or 0) if len(m) > 1 else 0
-            revenue += (m[2] or 0) if len(m) > 2 else 0
-            orders  += (m[3] or 0) if len(m) > 3 else 0
-        else:
-            # только revenue и ordered_units
-            revenue += (m[0] or 0) if len(m) > 0 else 0
-            orders  += (m[1] or 0) if len(m) > 1 else 0
+        views   += row.get('views',   0) or 0
+        clicks  += row.get('clicks',  0) or 0
+        revenue += row.get('revenue', 0) or 0
+        orders  += row.get('orders',  0) or 0
     conv = round((orders / views * 100), 2) if views > 0 else 0
     return {
         'views':   int(views),
@@ -192,16 +224,16 @@ def dashboard():
     date_from_all = str(today - timedelta(days=27))
     date_to_all   = str(today)
 
-    all_rows, metric_count = get_analytics(active_key['client_id'], active_key['api_key'], date_from_all, date_to_all)
+    all_rows = get_analytics(active_key['client_id'], active_key['api_key'], date_from_all, date_to_all)
 
     # Суммарные метрики за 4 недели
-    total = sum_metrics(all_rows, metric_count)
+    total = sum_metrics(all_rows)
 
     # Метрики по неделям
     weekly = []
     for label, wfrom, wto in weeks:
-        wrows = [r for r in all_rows if wfrom <= (r.get('dimensions') or [{}])[0].get('id', '')[:10] <= wto]
-        weekly.append({'label': label, **sum_metrics(wrows, metric_count)})
+        wrows = [r for r in all_rows if wfrom <= r.get('date', '')[:10] <= wto]
+        weekly.append({'label': label, **sum_metrics(wrows)})
 
     # ── Карточки метрик ────────────────────────────────────────────────────
     c = '<p class="ttl">Привет, ' + u['name'] + '! <span style="font-size:1rem;color:#888;font-weight:400">Статистика за 4 недели</span></p>'
@@ -323,29 +355,40 @@ def new_test():
 
     err = request.args.get('err', '')
 
-    # Загружаем товары с Озона для первого активного ключа
+    # Загружаем ВСЕ товары с Озона (постранично)
     key = active_keys[0]
     products = []
     try:
-        r = req.post(
-            f'{OZON_API_URL}/v3/product/list',
-            headers={'Client-Id': key['client_id'], 'Api-Key': key['api_key'], 'Content-Type': 'application/json'},
-            json={'filter': {}, 'last_id': '', 'limit': 100},
-            timeout=10
-        )
-        if r.status_code == 200:
-            items = r.json().get('result', {}).get('items', [])
-            if items:
-                # Получаем детали товаров
-                ids = [str(x['product_id']) for x in items[:50]]
-                r2 = req.post(
-                    f'{OZON_API_URL}/v2/product/info/list',
-                    headers={'Client-Id': key['client_id'], 'Api-Key': key['api_key'], 'Content-Type': 'application/json'},
-                    json={'product_id': [int(x) for x in ids]},
-                    timeout=10
-                )
-                if r2.status_code == 200:
-                    products = r2.json().get('result', {}).get('items', [])
+        headers = {'Client-Id': key['client_id'], 'Api-Key': key['api_key'], 'Content-Type': 'application/json'}
+        all_items = []
+        last_id = ''
+        while True:
+            r = req.post(
+                f'{OZON_API_URL}/v3/product/list',
+                headers=headers,
+                json={'filter': {}, 'last_id': last_id, 'limit': 1000},
+                timeout=15
+            )
+            if r.status_code != 200:
+                break
+            result = r.json().get('result', {})
+            items = result.get('items', [])
+            all_items.extend(items)
+            last_id = result.get('last_id', '')
+            if not last_id or len(items) < 1000:
+                break
+        # Получаем детали пачками по 100
+        for i in range(0, min(len(all_items), 1000), 100):
+            batch = all_items[i:i+100]
+            ids = [int(x['product_id']) for x in batch]
+            r2 = req.post(
+                f'{OZON_API_URL}/v2/product/info/list',
+                headers=headers,
+                json={'product_id': ids},
+                timeout=15
+            )
+            if r2.status_code == 200:
+                products.extend(r2.json().get('result', {}).get('items', []))
     except Exception:
         pass
 
