@@ -23,7 +23,7 @@ def get_analytics(client_id, api_key, date_from, date_to):
             json={
                 'date_from': date_from,
                 'date_to': date_to,
-                'metrics': ['hits_view', 'hits_tocart', 'revenue', 'ordered_units'],
+                'metrics': ['hits_view_pdp', 'hits_tocart', 'revenue', 'ordered_units'],
                 'dimension': ['day'],
                 'limit': 100
             },
