@@ -50,6 +50,8 @@ def verify_ozon(client_id, api_key):
             return False, 'Неверный Client ID или API Key'
         if r.status_code == 403:
             return False, 'Нет прав — выберите нужные роли'
+        if r.status_code == 429:
+            return True, 'Ключ работает (лимит запросов Озона — подождите минуту)'
         # Если 400 — пробуем другой эндпоинт
         if r.status_code == 400:
             r2 = requests.post(
@@ -60,6 +62,8 @@ def verify_ozon(client_id, api_key):
             )
             if r2.status_code in (200, 400):
                 return True, 'Ключ работает'
+            if r2.status_code == 429:
+                return True, 'Ключ работает (лимит запросов — подождите минуту)'
             if r2.status_code == 401:
                 return False, 'Неверный Client ID или API Key'
             if r2.status_code == 403:
