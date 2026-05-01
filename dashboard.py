@@ -481,7 +481,6 @@ def new_test():
     u = me()
     if not u:
         return redirect('/login')
-
     keys = db.get_keys(u['id'])
     active_keys = [k for k in keys if k['active']]
     if not active_keys:
@@ -489,18 +488,33 @@ def new_test():
 
     err = request.args.get('err', '')
 
-    # Товары загружаются через /api/products — страница открывается мгновенно
-    key = active_keys[0]
-    products = []  # JS загрузит через AJAX
-    low_stock_warning = ''  # предупреждение не нужно — товары грузятся асинхронно
-    prod_hint = 'Начните вводить название или артикул. Товары с остатками подгружаются автоматически.'
+    # Список магазинов
+    shops_opts = ''.join(
+        f'<option value="{k["id"]}">{k["shop_name"]} (ID: {k["client_id"]})</option>'
+        for k in active_keys
+    )
 
-    prod_block = (
+    c = (
+        '<div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem">'
+        '<a href="/tests" class="btn" style="background:#f0f2f5;border:1px solid #ddd;color:#444">&#8592; Назад</a>'
+        '<p class="ttl" style="margin:0">&#43; Новый A/B тест</p>'
+        '</div>'
+        + (alert(err, 'er') if err else '') +
+        '<div class="box">'
+        '<form method="POST" action="/tests/create">'
+
+        # Магазин
+        '<div class="fg"><label>Магазин</label>'
+        f'<select name="key_id" class="fi" required>{shops_opts}</select></div>'
+
+        # Товар — поиск с картинками (JS загружает асинхронно)
+        '<div class="fg" style="position:relative"><label>'
+        'Товар <span style="color:#27ae60;font-size:.85rem">(с остатками)</span>'
+        '</label>'
         '<input type="hidden" name="product" id="product_val">'
         '<div style="position:relative">'
         '<input type="text" id="prod_search" class="fi" autocomplete="off" '
-        'placeholder="Начните вводить название или артикул..." '
-        'style="padding-right:90px">'
+        'placeholder="Начните вводить название или артикул..." style="padding-right:90px">'
         '<button type="button" onclick="checkBySku()" '
         'style="position:absolute;right:.4rem;top:50%;transform:translateY(-50%);'
         'background:#667eea;color:#fff;border:none;border-radius:6px;'
@@ -517,32 +531,20 @@ def new_test():
         '<div id="prod_loading" style="display:none;color:#888;font-size:.85rem;margin-top:.4rem">'
         '&#128269; Загружаем список товаров...</div>'
         '<div id="sku_result" style="font-size:.85rem;margin-top:.4rem"></div>'
-    )
-
-    c = (
-        '<div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem">'
-        '<a href="/tests" class="btn" style="background:#f0f2f5;border:1px solid #ddd;color:#444">&#8592; Назад</a>'
-        '<p class="ttl" style="margin:0">&#43; Новый A/B тест</p>'
+        '<div class="hn" id="prod_hint_text">'
+        'Нажмите на поле — появится список товаров с остатками</div>'
         '</div>'
-        + (alert(err, 'er') if err else '')
-        + low_stock_warning
-        + '<div class="box">'
-        '<form method="POST" action="/tests/create" enctype="multipart/form-data">'
 
-        '<div class="fg"><label>Магазин</label>'
-        f'<select name="key_id" class="fi" required>{shops_opts}</select></div>'
-
-        '<div class="fg" style="position:relative"><label>Товар <span style="color:#27ae60;font-size:.85rem">(с остатками)</span></label>'
-        + prod_block +
-        '<div class="hn">' + prod_hint + '</div></div>'
-
-        '<div class="fg"><label>Количество вариантов фото <span style="color:#667eea">(от 2 до 10)</span></label>'
+        # Количество вариантов
+        '<div class="fg"><label>Количество вариантов фото '
+        '<span style="color:#667eea">(от 2 до 10)</span></label>'
         '<select name="variant_count" class="fi" id="vc_select">'
-        + ''.join(f'<option value="{i}">{i} варианта</option>' if i <= 4 else f'<option value="{i}">{i} вариантов</option>' for i in range(2, 11)) +
-        '</select></div>'
+        + ''.join(f'<option value="{i}">{i} варианта</option>' if i <= 4 else f'<option value="{i}">{i} вариантов</option>' for i in range(2, 11))
+        + '</select></div>'
 
         '<div id="variants_wrap"></div>'
 
+        # Стратегия
         '<div class="fg"><label>Стратегия ротации</label>'
         '<select name="strategy" class="fi">'
         '<option value="round_robin">По очереди (Round Robin) — равномерно</option>'
@@ -554,6 +556,25 @@ def new_test():
         '<button class="btn bp" style="width:100%">&#129514; Запустить тест</button>'
         '</form></div>'
 
+        # JS для вариантов фото
+        '<script>'
+        'function updateVariants() {'
+        '  var n = parseInt(document.getElementById("vc_select").value);'
+        '  var wrap = document.getElementById("variants_wrap");'
+        '  var html = "";'
+        '  for (var i = 1; i <= n; i++) {'
+        '    html += "<div class=\"fg\"><label>Вариант " + String.fromCharCode(64+i) + " — URL фото</label>"'
+        '         + "<input type=\"url\" name=\"photo_" + i + "\" class=\"fi\"'
+        '           placeholder=\"https://...\" required>"'
+        '         + "<div class=\"hn\">Ссылка на фото (JPEG/PNG)</div></div>";'
+        '  }'
+        '  wrap.innerHTML = html;'
+        '}'
+        'document.getElementById("vc_select").addEventListener("change", updateVariants);'
+        'updateVariants();'
+        '</script>'
+
+        # Подключаем внешний JS для поиска товаров
         '<script src="/static/product-search.js"></script>'
     )
     return render(c, 'tests')
