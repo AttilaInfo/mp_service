@@ -5,18 +5,16 @@ from config import DATABASE_URL
 
 def get_conn():
     """Получить соединение с БД."""
+    if not DATABASE_URL:
+        raise RuntimeError('DATABASE_URL не задан в переменных окружения')
     return psycopg2.connect(DATABASE_URL)
 
 
 def init_db():
-    """
-    Создать все таблицы при первом запуске.
-    Безопасно вызывать повторно — IF NOT EXISTS.
-    """
+    """Создать все таблицы при первом запуске."""
     with get_conn() as conn:
         with conn.cursor() as cur:
 
-            # Пользователи
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     id          SERIAL PRIMARY KEY,
@@ -27,7 +25,6 @@ def init_db():
                 )
             """)
 
-            # API ключи Озона
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS api_keys (
                     id          SERIAL PRIMARY KEY,
@@ -42,37 +39,35 @@ def init_db():
                 )
             """)
 
-            # Тесты
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS tests (
-                    id          SERIAL PRIMARY KEY,
-                    user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
-                    shop_name   TEXT NOT NULL,
-                    sku         TEXT NOT NULL,
+                    id           SERIAL PRIMARY KEY,
+                    user_id      INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                    shop_name    TEXT NOT NULL,
+                    sku          TEXT NOT NULL,
                     product_name TEXT NOT NULL,
-                    status      TEXT DEFAULT 'running',
-                    winner      TEXT DEFAULT '',
-                    created_at  TIMESTAMP DEFAULT NOW()
+                    status       TEXT DEFAULT 'running',
+                    winner       TEXT DEFAULT '',
+                    created_at   TIMESTAMP DEFAULT NOW()
                 )
             """)
 
-            # Варианты фото в тесте (от 2 до 10)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS test_variants (
-                    id          SERIAL PRIMARY KEY,
-                    test_id     INTEGER REFERENCES tests(id) ON DELETE CASCADE,
-                    label       TEXT NOT NULL,
-                    photo_url   TEXT NOT NULL,
-                    views       INTEGER DEFAULT 0,
-                    clicks      INTEGER DEFAULT 0,
-                    sales       INTEGER DEFAULT 0,
-                    ctr         FLOAT DEFAULT 0.0,
-                    conversion  FLOAT DEFAULT 0.0
+                    id         SERIAL PRIMARY KEY,
+                    test_id    INTEGER REFERENCES tests(id) ON DELETE CASCADE,
+                    label      TEXT NOT NULL,
+                    photo_url  TEXT NOT NULL,
+                    views      INTEGER DEFAULT 0,
+                    clicks     INTEGER DEFAULT 0,
+                    sales      INTEGER DEFAULT 0,
+                    ctr        FLOAT DEFAULT 0.0,
+                    conversion FLOAT DEFAULT 0.0
                 )
             """)
 
         conn.commit()
-    print('БД инициализирована успешно')
+    print('БД: все таблицы созданы')
 
 
 # ── Пользователи ───────────────────────────────────────────────────────────
