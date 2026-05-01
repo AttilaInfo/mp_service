@@ -41,7 +41,7 @@ def verify_ozon(client_id, api_key):
         }
         # Пробуем warehouse/list, если 400 — пробуем product/list
         r = requests.post(
-            f'{OZON_API_URL}/v1/warehouse/list',
+            f'{OZON_API_URL}/v2/warehouse/list',
             headers=headers, json={}, timeout=8
         )
         if r.status_code == 200:
@@ -55,7 +55,7 @@ def verify_ozon(client_id, api_key):
         # Если 400 — пробуем другой эндпоинт
         if r.status_code == 400:
             r2 = requests.post(
-                f'{OZON_API_URL}/v2/product/list',
+                f'{OZON_API_URL}/v3/product/list',
                 headers=headers,
                 json={'filter': {}, 'last_id': '', 'limit': 1},
                 timeout=8
