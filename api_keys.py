@@ -16,8 +16,10 @@ def api_keys():
     if not u:
         return redirect('/login')
 
-    msg  = request.args.get('msg', '')
-    err  = request.args.get('err', '')
+    msg       = request.args.get('msg', '')
+    err       = request.args.get('err', '')
+    saved_shop = request.args.get('shop', '')
+    saved_cid  = request.args.get('cid', '')
     keys = db.get_keys(u['id'])
     cnt  = len(keys)
 
@@ -49,10 +51,10 @@ def api_keys():
             '<form method="POST" action="/api-keys/add">'
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">'
             '<div class="fg"><label>Название магазина</label>'
-            '<input type="text" name="shop" class="fi" placeholder="Мой магазин" required maxlength="100">'
+            '<input type="text" name="shop" class="fi" placeholder="Мой магазин" required maxlength="100" value="' + saved_shop + '">'
             '<div class="hn">Любое удобное название</div></div>'
             '<div class="fg"><label>Client ID</label>'
-            '<input type="text" name="cid" class="fi" placeholder="123456789" required maxlength="50">'
+            '<input type="text" name="cid" class="fi" placeholder="123456789" required maxlength="50" value="' + saved_cid + '">'
             '<div class="hn">Числовой ID из личного кабинета</div></div>'
             '</div>'
             '<div class="fg">'
@@ -121,11 +123,11 @@ def add_key():
     akey = request.form.get('akey', '').strip()
 
     if not shop or not cid or not akey:
-        return redirect('/api-keys?err=Заполните+все+поля')
+        return redirect(f'/api-keys?err=Заполните+все+поля&shop={shop}&cid={cid}')
     if not cid.isdigit():
-        return redirect('/api-keys?err=Client+ID+должен+быть+числом')
+        return redirect(f'/api-keys?err=Client+ID+должен+быть+числом&shop={shop}&cid={cid}')
     if len(akey) < 10:
-        return redirect('/api-keys?err=API+Key+слишком+короткий')
+        return redirect(f'/api-keys?err=API+Key+слишком+короткий&shop={shop}&cid={cid}')
 
     ok, msg = verify_ozon(cid, akey)
     db.add_key(u['id'], shop, cid, akey, akey[-4:], ok, msg)
