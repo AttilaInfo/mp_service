@@ -11,63 +11,65 @@ dashboard_bp = Blueprint('dashboard', __name__)
 
 
 def get_analytics(client_id, api_key, date_from, date_to):
-    """Получить аналитику с Озона за период. Один запрос со всеми метриками."""
-    import time
-    headers = {
-        'Client-Id': client_id,
-        'Api-Key': api_key,
-        'Content-Type': 'application/json'
-    }
-    base = {
-        'date_from': date_from,
-        'date_to': date_to,
-        'dimension': ['day'],
-        'limit': 1000
-    }
+    """Два раздельных запроса: трафик и продажи. Пауза между ними."""
+    import time as _t
+    h = {'Client-Id': client_id, 'Api-Key': api_key, 'Content-Type': 'application/json'}
+    base = {'date_from': date_from, 'date_to': date_to, 'dimension': ['day'], 'limit': 1000}
 
-    # Один запрос со всеми нужными метриками
-    rows_traffic = []
-    rows_sales = []
+    def fetch(metrics, retries=2):
+        for attempt in range(retries):
+            try:
+                r = req.post(f'{OZON_API_URL}/v1/analytics/data', headers=h,
+                    json={**base, 'metrics': metrics}, timeout=15)
+                if r.status_code == 200:
+                    return r.json().get('result', {}).get('data', [])
+                if r.status_code == 429:
+                    _t.sleep(3)
+            except Exception:
+                pass
+        return []
 
-    # Пробуем получить всё одним запросом
-    try:
-        r = req.post(f'{OZON_API_URL}/v1/analytics/data', headers=headers,
-            json={**base, 'metrics': ['hits_view_pdp', 'hits_tocart', 'revenue', 'ordered_units']},
-            timeout=15)
-        if r.status_code == 200:
-            data = r.json().get('result', {}).get('data', [])
-            if data:
-                # Все 4 метрики в одном запросе
-                combined = []
-                for row in data:
-                    date = (row.get('dimensions') or [{}])[0].get('id', '')[:10]
-                    m = row.get('metrics', [])
-                    combined.append({
-                        'date': date,
-                        'views':   int((m[0] or 0) if len(m) > 0 else 0),
-                        'clicks':  int((m[1] or 0) if len(m) > 1 else 0),
-                        'revenue': float((m[2] or 0) if len(m) > 2 else 0),
-                        'orders':  int((m[3] or 0) if len(m) > 3 else 0),
-                    })
-                return combined
-        elif r.status_code == 429:
-            time.sleep(2)
-    except Exception:
-        pass
+    # Запрос 1: просмотры и клики
+    rows_v = fetch(['hits_view_pdp', 'hits_tocart'])
+    _t.sleep(1)  # обязательная пауза
+    # Запрос 2: выручка и заказы
+    rows_s = fetch(['revenue', 'ordered_units'])
 
-    # Если не получилось — пробуем по частям с паузой
-    try:
-        r = req.post(f'{OZON_API_URL}/v1/analytics/data', headers=headers,
-            json={**base, 'metrics': ['hits_view_pdp', 'hits_tocart']}, timeout=15)
-        if r.status_code == 200:
-            rows_traffic = r.json().get('result', {}).get('data', [])
-        time.sleep(1)  # пауза между запросами
-        r = req.post(f'{OZON_API_URL}/v1/analytics/data', headers=headers,
-            json={**base, 'metrics': ['revenue', 'ordered_units']}, timeout=15)
-        if r.status_code == 200:
-            rows_sales = r.json().get('result', {}).get('data', [])
-    except Exception:
-        pass
+    # Индексируем продажи по дате
+    sales = {}
+    for row in rows_s:
+        d = (row.get('dimensions') or [{}])[0].get('id', '')[:10]
+        m = row.get('metrics', [])
+        sales[d] = {
+            'revenue': float((m[0] or 0) if len(m) > 0 else 0),
+            'orders':  int((m[1] or 0) if len(m) > 1 else 0),
+        }
+
+    # Собираем итоговые строки
+    result = []
+    if rows_v:
+        for row in rows_v:
+            d = (row.get('dimensions') or [{}])[0].get('id', '')[:10]
+            m = row.get('metrics', [])
+            s = sales.get(d, {'revenue': 0.0, 'orders': 0})
+            result.append({
+                'date':    d,
+                'views':   int((m[0] or 0) if len(m) > 0 else 0),
+                'clicks':  int((m[1] or 0) if len(m) > 1 else 0),
+                'revenue': s['revenue'],
+                'orders':  s['orders'],
+            })
+    elif rows_s:
+        # Только продажи (трафик недоступен)
+        for row in rows_s:
+            d = (row.get('dimensions') or [{}])[0].get('id', '')[:10]
+            m = row.get('metrics', [])
+            result.append({
+                'date': d, 'views': 0, 'clicks': 0,
+                'revenue': float((m[0] or 0) if len(m) > 0 else 0),
+                'orders':  int((m[1] or 0) if len(m) > 1 else 0),
+            })
+    return result
 
     # Объединяем по дате
     sales_by_date = {}
@@ -405,7 +407,7 @@ def new_test():
                 f'{OZON_API_URL}/v3/product/list',
                 headers=headers_k,
                 json={
-                    'filter': {'visibility': 'IN_SALE'},
+                    'filter': {},
                     'last_id': last_id,
                     'limit': 1000
                 },
@@ -437,6 +439,14 @@ def new_test():
     except Exception:
         pass
 
+    # Проверяем остатки для предупреждения
+    low_stock_warning = (
+        '<div class="al wn" style="margin-bottom:1.2rem">'
+        '&#9888; <strong>Обратите внимание:</strong> в списке могут быть товары без остатков. '
+        'Тест на таком товаре не принесёт данных пока не появятся остатки. '
+        'Мы не ограничиваем выбор — решение за вами.</div>'
+    ) if products else ''
+
     # Строим список магазинов
     shops_opts = ''.join(
         f'<option value="{k["id"]}">{k["shop_name"]} (ID: {k["client_id"]})</option>'
@@ -463,8 +473,9 @@ def new_test():
         '<a href="/tests" class="btn" style="background:#f0f2f5;border:1px solid #ddd;color:#444">&#8592; Назад</a>'
         '<p class="ttl" style="margin:0">&#43; Новый A/B тест</p>'
         '</div>'
-        + (alert(err, 'er') if err else '') +
-        '<div class="box">'
+        + (alert(err, 'er') if err else '')
+        + low_stock_warning
+        + '<div class="box">'
         '<form method="POST" action="/tests/create" enctype="multipart/form-data">'
 
         '<div class="fg"><label>Магазин</label>'
