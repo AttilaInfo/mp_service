@@ -418,7 +418,9 @@ function renderDropdown(q) {
   if (q) {
     var ql = q.toLowerCase();
     list = list.filter(function(p){
-      return p.sku.toLowerCase().indexOf(ql) >= 0 || p.name.toLowerCase().indexOf(ql) >= 0;
+      return (p.sku  && p.sku.toLowerCase().indexOf(ql)     >= 0)
+          || (p.ozon_id && p.ozon_id.indexOf(ql)            >= 0)
+          || (p.name && p.name.toLowerCase().indexOf(ql)    >= 0);
     });
   }
   if (!list.length) {
@@ -439,7 +441,10 @@ function renderDropdown(q) {
       + img_html
       + '<div style="min-width:0">'
       + '<div style="font-size:.9rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:360px">' + p.name + '</div>'
-      + '<div style="font-size:.78rem;color:#888;margin-top:.15rem">Артикул: ' + p.sku + '</div>'
+      + '<div style="font-size:.78rem;color:#888;margin-top:.15rem">'
+      + (p.sku ? 'Арт: ' + p.sku : '')
+      + (p.ozon_id ? ' &nbsp;·&nbsp; ID: ' + p.ozon_id : '')
+      + '</div>'
       + '</div></div>';
   }).join('')
   + (list.length > 30 ? '<div style="padding:.7rem;color:#888;text-align:center;font-size:.85rem">...ещё ' + (list.length-30) + ' товаров. Уточните запрос.</div>' : '');
@@ -551,12 +556,22 @@ def api_products():
                 resp   = r2.json()
                 items2 = (resp.get('result') or {}).get('items') or resp.get('items') or []
                 for p in items2:
-                    pid = str(p.get('id') or p.get('product_id', ''))
-                    img = f'https://cdn1.ozone.ru/s3/multimedia-{pid[-1]}/{pid}.jpg' if pid else ''
-                    sku  = p.get('offer_id', '')
-                    name = p.get('name', '')[:80]
-                    if sku and name:
-                        products.append({'sku': sku, 'name': name, 'img': img})
+                    sku     = p.get('offer_id', '')
+                    ozon_id = str(p.get('id') or p.get('product_id', ''))
+                    name    = p.get('name', '')[:80]
+                    if not name:
+                        continue
+                    # Берём картинку из разных возможных полей
+                    imgs = p.get('images') or p.get('primary_image') or []
+                    if isinstance(imgs, list) and imgs:
+                        img = imgs[0] if isinstance(imgs[0], str) else ''
+                    elif isinstance(imgs, str):
+                        img = imgs
+                    else:
+                        # Fallback на CDN по product_id
+                        pid = str(p.get('id') or p.get('product_id', ''))
+                        img = f'https://cdn1.ozone.ru/s3/multimedia-{pid[-1]}/{pid}.jpg' if pid else ''
+                    products.append({'sku': sku, 'ozon_id': ozon_id, 'name': name, 'img': img})
             _t.sleep(0.2)
 
         return jsonify(products)
@@ -565,45 +580,64 @@ def api_products():
 
 @dashboard_bp.route('/api/check-sku')
 def check_sku():
-    """Проверяет SKU через API Озона — есть ли товар и есть ли остатки."""
+    """Проверяет артикул через API Озона — есть ли товар и есть ли остатки."""
     from flask import jsonify
     u = me()
     if not u:
-        return jsonify({'found': False, 'error': 'not_auth'})
-
+        return jsonify({'found': False})
     sku = request.args.get('sku', '').strip()
     if not sku:
         return jsonify({'found': False})
-
     keys = db.get_keys(u['id'])
     key  = next((k for k in keys if k['active']), None)
     if not key:
-        return jsonify({'found': False, 'error': 'no_key'})
+        return jsonify({'found': False})
 
     hk = {'Client-Id': key['client_id'], 'Api-Key': key['api_key'], 'Content-Type': 'application/json'}
+    items = []
     try:
+        # Ищем по offer_id (артикул продавца: подарок_роза, AL_SKB_44 и т.д.)
         r = req.post(f'{OZON_API_URL}/v3/product/info/list', headers=hk,
             json={'offer_id': [sku]}, timeout=10)
         if r.status_code == 200:
-            items = r.json().get('result', {}).get('items', [])
-            if items:
-                p = items[0]
-                name = p.get('name', sku)[:80]
-                # Проверяем остатки
-                stocks = p.get('stocks', {})
-                present = stocks.get('present', 0) or 0
-                has_stock = present > 0
-                return jsonify({
-                    'found': True,
-                    'has_stock': has_stock,
-                    'name': name,
-                    'sku': sku,
-                    'stock': present
-                })
+            resp  = r.json()
+            items = (resp.get('result') or {}).get('items') or resp.get('items') or []
+
+        # Если не нашли по offer_id — пробуем как числовой product_id
+        if not items and sku.isdigit():
+            r2 = req.post(f'{OZON_API_URL}/v3/product/info/list', headers=hk,
+                json={'product_id': [int(sku)]}, timeout=10)
+            if r2.status_code == 200:
+                resp2 = r2.json()
+                items = (resp2.get('result') or {}).get('items') or resp2.get('items') or []
+
+        if items:
+            p        = items[0]
+            name     = p.get('name', sku)[:80]
+            offer_id = p.get('offer_id', sku)
+            pid      = p.get('id') or p.get('product_id', 0)
+
+            # Проверяем остатки
+            has_stock = False
+            stock_val = 0
+            if pid:
+                r3 = req.post(f'{OZON_API_URL}/v2/product/info', headers=hk,
+                    json={'product_id': int(pid)}, timeout=10)
+                if r3.status_code == 200:
+                    stocks    = r3.json().get('result', {}).get('stocks', {})
+                    stock_val = (stocks.get('present') or 0) + (stocks.get('coming') or 0)
+                    has_stock = stock_val > 0
+
+            return jsonify({
+                'found':     True,
+                'has_stock': has_stock,
+                'name':      name,
+                'sku':       offer_id,
+                'stock':     stock_val
+            })
     except Exception:
         pass
     return jsonify({'found': False})
-
 
 @dashboard_bp.route('/tests/new')
 def new_test():
