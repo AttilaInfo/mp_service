@@ -378,6 +378,62 @@ def tests():
 
 
 # ── Создание теста ─────────────────────────────────────────────────────────
+@dashboard_bp.route('/static/product-search.js')
+def product_search_js():
+    from flask import Response
+    js = open('/tmp/product_search.js').read()
+    return Response(js, mimetype='application/javascript')
+
+
+@dashboard_bp.route('/api/products')
+def api_products():
+    """Загрузка товаров с остатками для формы создания теста."""
+    from flask import jsonify
+    import time as _t
+    u = me()
+    if not u:
+        return jsonify([])
+    keys = db.get_keys(u['id'])
+    key  = next((k for k in keys if k['active']), None)
+    if not key:
+        return jsonify([])
+    hk = {'Client-Id': key['client_id'], 'Api-Key': key['api_key'], 'Content-Type': 'application/json'}
+    all_items = []
+    last_id = ''
+    try:
+        while len(all_items) < 2000:
+            r = req.post(f'{OZON_API_URL}/v3/product/list', headers=hk,
+                json={'filter': {'visibility': 'IN_SALE'}, 'last_id': last_id, 'limit': 1000},
+                timeout=15)
+            if r.status_code != 200:
+                break
+            result = r.json().get('result', {})
+            items  = result.get('items', [])
+            all_items.extend(items)
+            last_id = result.get('last_id', '')
+            if not last_id or len(items) < 1000:
+                break
+            _t.sleep(0.3)
+        products = []
+        for i in range(0, min(len(all_items), 2000), 100):
+            batch = all_items[i:i+100]
+            r2 = req.post(f'{OZON_API_URL}/v2/product/info/list', headers=hk,
+                json={'product_id': [int(x['product_id']) for x in batch]}, timeout=15)
+            if r2.status_code == 200:
+                for p in r2.json().get('result', {}).get('items', []):
+                    images = p.get('images', [])
+                    img = images[0] if images and isinstance(images[0], str) else ''
+                    products.append({
+                        'sku':  p.get('offer_id', ''),
+                        'name': p.get('name', '')[:80],
+                        'img':  img
+                    })
+            _t.sleep(0.2)
+        return jsonify(products)
+    except Exception as e:
+        return jsonify([])
+
+
 @dashboard_bp.route('/api/check-sku')
 def check_sku():
     """Проверяет SKU через API Озона — есть ли товар и есть ли остатки."""
@@ -433,101 +489,32 @@ def new_test():
 
     err = request.args.get('err', '')
 
-    # Загружаем только товары В ПРОДАЖЕ (IN_SALE = есть остатки)
+    # Товары загружаются через /api/products — страница открывается мгновенно
     key = active_keys[0]
-    products = []
-    try:
-        import time as _time
-        hk = {'Client-Id': key['client_id'], 'Api-Key': key['api_key'], 'Content-Type': 'application/json'}
-        all_items = []
-        last_id = ''
-        while len(all_items) < 3000:
-            r = req.post(f'{OZON_API_URL}/v3/product/list', headers=hk,
-                json={'filter': {'visibility': 'IN_SALE'}, 'last_id': last_id, 'limit': 1000},
-                timeout=15)
-            if r.status_code != 200:
-                break
-            result = r.json().get('result', {})
-            items  = result.get('items', [])
-            all_items.extend(items)
-            last_id = result.get('last_id', '')
-            if not last_id or len(items) < 1000:
-                break
-            _time.sleep(0.3)
-        for i in range(0, min(len(all_items), 3000), 100):
-            batch = all_items[i:i+100]
-            r2 = req.post(f'{OZON_API_URL}/v2/product/info/list', headers=hk,
-                json={'product_id': [int(x['product_id']) for x in batch]}, timeout=15)
-            if r2.status_code == 200:
-                products.extend(r2.json().get('result', {}).get('items', []))
-            _time.sleep(0.2)
-    except Exception:
-        pass
-
-    # Проверяем остатки для предупреждения
-    low_stock_warning = (
-        '<div class="al wn" style="margin-bottom:1.2rem">'
-        '&#9888; <strong>Обратите внимание:</strong> в списке могут быть товары без остатков. '
-        'Тест на таком товаре не принесёт данных пока не появятся остатки. '
-        'Мы не ограничиваем выбор — решение за вами.</div>'
-    ) if products else ''
-
-    # Строим список магазинов
-    shops_opts = ''.join(
-        f'<option value="{k["id"]}">{k["shop_name"]} (ID: {k["client_id"]})</option>'
-        for k in active_keys
-    )
-
-    # Готовим данные товаров для JS-поиска
-    import json as _json
-    prod_count = len(products)
-
-    # Список товаров для JS (SKU, название, картинка)
-    js_products = []
-    for p in products:
-        images = p.get('images', []) or p.get('primary_image', '')
-        img = ''
-        if isinstance(images, list) and images:
-            img = images[0] if isinstance(images[0], str) else ''
-        elif isinstance(images, str):
-            img = images
-        js_products.append({
-            'sku':  p.get('offer_id', ''),
-            'name': p.get('name', 'Без названия')[:80],
-            'img':  img
-        })
-
-    js_data = _json.dumps(js_products, ensure_ascii=False)
-
-    if prod_count > 0:
-        prod_hint = f'Загружено {prod_count} товаров с остатками. Начните вводить название или артикул.'
-    else:
-        prod_hint = 'Не удалось загрузить список. Введите SKU вручную — нажмите «Найти» для проверки.'
+    products = []  # JS загрузит через AJAX
+    prod_hint = 'Начните вводить название или артикул. Товары с остатками подгружаются автоматически.'
 
     prod_block = (
-        # Скрытое поле с выбранным товаром
         '<input type="hidden" name="product" id="product_val">'
-        # Поле поиска
         '<div style="position:relative">'
         '<input type="text" id="prod_search" class="fi" autocomplete="off" '
-        'placeholder="Введите название, артикул или SKU..." '
-        'oninput="searchProducts(this.value)" onfocus="searchProducts(this.value)">'
-        # Кнопка найти по SKU если нет в списке
+        'placeholder="Начните вводить название или артикул..." '
+        'style="padding-right:90px">'
         '<button type="button" onclick="checkBySku()" '
-        'style="position:absolute;right:.5rem;top:50%;transform:translateY(-50%);'
+        'style="position:absolute;right:.4rem;top:50%;transform:translateY(-50%);'
         'background:#667eea;color:#fff;border:none;border-radius:6px;'
-        'padding:.3rem .8rem;cursor:pointer;font-size:.82rem">Найти</button>'
+        'padding:.35rem .85rem;cursor:pointer;font-size:.82rem;font-weight:600">'
+        '&#128269; Найти</button>'
         '</div>'
-        # Выпадающий список результатов
-        '<div id="prod_dropdown" style="display:none;position:absolute;z-index:100;'
-        'background:#fff;border:1px solid #e0e0e0;border-radius:8px;'
-        'box-shadow:0 4px 16px rgba(0,0,0,.12);max-height:320px;overflow-y:auto;'
-        'width:calc(100% - 3rem);margin-top:.2rem"></div>'
-        # Выбранный товар
-        '<div id="prod_selected" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;'
-        'border-radius:8px;padding:.75rem 1rem;margin-top:.5rem;'
-        'display:flex;align-items:center;gap:.75rem"></div>'
-        # Результат проверки SKU
+        '<div id="prod_dropdown" style="display:none;position:absolute;z-index:200;'
+        'background:#fff;border:1px solid #ddd;border-radius:10px;'
+        'box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:350px;overflow-y:auto;'
+        'left:0;right:0;margin-top:4px"></div>'
+        '<div id="prod_selected" style="display:none;background:#f0fdf4;'
+        'border:2px solid #86efac;border-radius:10px;padding:.85rem 1rem;margin-top:.6rem;'
+        'align-items:center;gap:.85rem"></div>'
+        '<div id="prod_loading" style="display:none;color:#888;font-size:.85rem;margin-top:.4rem">'
+        '&#128269; Загружаем список товаров...</div>'
         '<div id="sku_result" style="font-size:.85rem;margin-top:.4rem"></div>'
     )
 
@@ -566,75 +553,7 @@ def new_test():
         '<button class="btn bp" style="width:100%">&#129514; Запустить тест</button>'
         '</form></div>'
 
-        '<script>'
-        'var PRODUCTS = ' + js_data + ';'
-        'function searchProducts(q) {'\
-        '  var dd = document.getElementById("prod_dropdown");'\
-        '  if (!q || q.length < 1) { dd.style.display="none"; return; }'\
-        '  var ql = q.toLowerCase();'\
-        '  var matches = PRODUCTS.filter(function(p) {'\
-        '    return p.sku.toLowerCase().includes(ql) || p.name.toLowerCase().includes(ql);'\
-        '  }).slice(0, 20);'\
-        '  if (!matches.length) { dd.innerHTML="<div style=padding:.8rem;color:#888>Ничего не найдено. Попробуйте «Найти» для проверки по SKU.</div>"; dd.style.display="block"; return; }'\
-        '  dd.innerHTML = matches.map(function(p) {'\
-        '    var img = p.img ? "<img src=\\""+p.img+"\\" style=\\"width:40px;height:40px;object-fit:cover;border-radius:4px;flex-shrink:0\\">" : "<div style=\\"width:40px;height:40px;background:#f0f2f5;border-radius:4px;flex-shrink:0\\"></div>";'\
-        '    return "<div onclick=\\"selectProduct(\'"+p.sku+"\',\'"+p.name.replace(/\'/g,\"\\")+"\',\'"+p.img+"\')\\""'\
-        '         + " style=\\"display:flex;align-items:center;gap:.75rem;padding:.7rem 1rem;cursor:pointer;border-bottom:1px solid #f5f5f5\\""\'\n'\
-        '         + " onmouseover=\\"this.style.background=\'#f8f9fa\'\\" onmouseout=\\"this.style.background=\'\'\\">"\n'\
-        '         + img + "<div><div style=\\"font-size:.9rem;font-weight:600\\">"+p.name+"</div><div style=\\"font-size:.78rem;color:#888\\">SKU: "+p.sku+"</div></div></div>";'\
-        '  }).join("");'\
-        '  dd.style.display="block";'\
-        '}'\
-        'function selectProduct(sku, name, img) {'\
-        '  document.getElementById("product_val").value = sku + "|" + name;'\
-        '  document.getElementById("prod_search").value = name + " (SKU: " + sku + ")";'\
-        '  document.getElementById("prod_dropdown").style.display = "none";'\
-        '  var img_tag = img ? "<img src=\\""+img+"\\" style=\\"width:48px;height:48px;object-fit:cover;border-radius:6px\\">" : "";'\
-        '  var sel = document.getElementById("prod_selected");'\
-        '  sel.innerHTML = img_tag + "<div><strong>" + name + "</strong><div style=\\"font-size:.82rem;color:#666\\">SKU: " + sku + "</div></div>";'\
-        '  sel.style.display = "flex";'\
-        '  document.getElementById("sku_result").innerHTML = "";'\
-        '}'\
-        'function checkBySku() {'\
-        '  var sku = document.getElementById("prod_search").value.trim();'\
-        '  if (!sku) return;'\
-        '  var res = document.getElementById("sku_result");'\
-        '  res.innerHTML = "&#128269; Проверяем...";'\
-        '  fetch("/api/check-sku?sku=" + encodeURIComponent(sku))'\
-        '    .then(function(r){return r.json();})'\
-        '    .then(function(d) {'\
-        '      if (d.found && d.has_stock) {'\
-        '        selectProduct(d.sku, d.name, "");'\
-        '        res.innerHTML = "<span style=color:#27ae60>&#10003; Товар найден и добавлен</span>";'\
-        '      } else if (d.found && !d.has_stock) {'\
-        '        res.innerHTML = "<span style=color:#e67e22>&#9888; Товар найден, но нет остатков. Пополните остатки на FBS — товар появится в списке.</span>";'\
-        '      } else {'\
-        '        res.innerHTML = "<span style=color:#e74c3c>&#10007; Товар с таким SKU не найден в вашем магазине</span>";'\
-        '      }'\
-        '    }).catch(function(){ res.innerHTML = "Ошибка проверки"; });'\
-        '}'\
-        'document.addEventListener("click", function(e) {'\
-        '  if (!e.target.closest || !e.target.closest("#prod_search")) {'\
-        '    var dd = document.getElementById("prod_dropdown");'\
-        '    if (dd) dd.style.display="none";'\
-        '  }'\
-        '});'\
-        '</script>'
-        '<script>'
-        'function updateVariants() {'
-        '  var n = parseInt(document.getElementById("vc_select").value);'
-        '  var wrap = document.getElementById("variants_wrap");'
-        '  var html = "";'
-        '  for (var i = 1; i <= n; i++) {'
-        '    html += "<div class=\\"fg\\"><label>Вариант " + String.fromCharCode(64+i) + " — URL фото</label>"'
-        '         + "<input type=\\"url\\" name=\\"photo_" + i + "\\" class=\\"fi\\" placeholder=\\"https://...\\" required>"'
-        '         + "<div class=\\"hn\\">Ссылка на фото (JPEG/PNG)</div></div>";'
-        '  }'
-        '  wrap.innerHTML = html;'
-        '}'
-        'document.getElementById("vc_select").addEventListener("change", updateVariants);'
-        'updateVariants();'
-        '</script>'
+        '<script src="/static/product-search.js"></script>'
     )
     return render(c, 'tests')
 
