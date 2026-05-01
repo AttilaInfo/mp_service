@@ -36,11 +36,11 @@ def api_keys():
         '</div>'
         '<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:10px;padding:1.2rem;margin-bottom:1.2rem">'
         '<p style="font-weight:700;margin-bottom:.8rem;color:#856404">&#9888; Какие права выбрать:</p>'
-        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.6rem">'
-        '<div style="display:flex;gap:.5rem;font-size:.9rem"><span style="color:#27ae60;font-weight:700">&#10003;</span><div><strong>Product</strong> &mdash; управление товарами и фото</div></div>'
+        '<div style="display:flex;flex-direction:column;gap:.5rem">'
         '<div style="display:flex;gap:.5rem;font-size:.9rem"><span style="color:#27ae60;font-weight:700">&#10003;</span><div><strong>Product read-only</strong> &mdash; чтение данных о товарах</div></div>'
-        '<div style="display:flex;gap:.5rem;font-size:.9rem"><span style="color:#27ae60;font-weight:700">&#10003;</span><div><strong>Report</strong> &mdash; отчёты и статистика</div></div>'
         '<div style="display:flex;gap:.5rem;font-size:.9rem"><span style="color:#27ae60;font-weight:700">&#10003;</span><div><strong>Warehouse</strong> &mdash; для проверки подключения</div></div>'
+        '<div style="display:flex;gap:.5rem;font-size:.9rem"><span style="color:#27ae60;font-weight:700">&#10003;</span><div><strong>Report</strong> &mdash; отчёты и статистика</div></div>'
+        '<div style="display:flex;gap:.5rem;font-size:.9rem"><span style="color:#27ae60;font-weight:700">&#10003;</span><div><strong>Product</strong> &mdash; управление товарами и фото</div></div>'
         '</div></div>'
     )
 
