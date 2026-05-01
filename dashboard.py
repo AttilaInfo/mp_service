@@ -519,7 +519,7 @@ def api_products():
                 json={'filter': {'visibility': 'IN_SALE'}, 'last_id': last_id, 'limit': 1000},
                 timeout=15)
             if r.status_code != 200:
-                break
+                return jsonify({'error': f'product/list status {r.status_code}', 'data': []})
             result = r.json().get('result', {})
             items  = result.get('items', [])
             all_items.extend(items)
@@ -544,7 +544,7 @@ def api_products():
             _t.sleep(0.2)
         return jsonify(products)
     except Exception as e:
-        return jsonify([])
+        return jsonify({'error': str(e), 'data': []})
 
 
 @dashboard_bp.route('/api/check-sku')
