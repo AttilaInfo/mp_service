@@ -378,6 +378,48 @@ def tests():
 
 
 # ── Создание теста ─────────────────────────────────────────────────────────
+@dashboard_bp.route('/api/check-sku')
+def check_sku():
+    """Проверяет SKU через API Озона — есть ли товар и есть ли остатки."""
+    from flask import jsonify
+    u = me()
+    if not u:
+        return jsonify({'found': False, 'error': 'not_auth'})
+
+    sku = request.args.get('sku', '').strip()
+    if not sku:
+        return jsonify({'found': False})
+
+    keys = db.get_keys(u['id'])
+    key  = next((k for k in keys if k['active']), None)
+    if not key:
+        return jsonify({'found': False, 'error': 'no_key'})
+
+    hk = {'Client-Id': key['client_id'], 'Api-Key': key['api_key'], 'Content-Type': 'application/json'}
+    try:
+        r = req.post(f'{OZON_API_URL}/v2/product/info/list', headers=hk,
+            json={'offer_id': [sku]}, timeout=10)
+        if r.status_code == 200:
+            items = r.json().get('result', {}).get('items', [])
+            if items:
+                p = items[0]
+                name = p.get('name', sku)[:80]
+                # Проверяем остатки
+                stocks = p.get('stocks', {})
+                present = stocks.get('present', 0) or 0
+                has_stock = present > 0
+                return jsonify({
+                    'found': True,
+                    'has_stock': has_stock,
+                    'name': name,
+                    'sku': sku,
+                    'stock': present
+                })
+    except Exception:
+        pass
+    return jsonify({'found': False})
+
+
 @dashboard_bp.route('/tests/new')
 def new_test():
     u = me()
@@ -391,48 +433,31 @@ def new_test():
 
     err = request.args.get('err', '')
 
-    # Загружаем только товары С ОСТАТКАМИ (оптимизация для больших каталогов)
+    # Загружаем только товары В ПРОДАЖЕ (IN_SALE = есть остатки)
     key = active_keys[0]
     products = []
     try:
         import time as _time
-        headers_k = {'Client-Id': key['client_id'], 'Api-Key': key['api_key'], 'Content-Type': 'application/json'}
-
-        # Шаг 1: получаем товары с ненулевым остатком через stocks
-        # Фильтр visibility: IN_SALE — только товары в продаже с остатками
+        hk = {'Client-Id': key['client_id'], 'Api-Key': key['api_key'], 'Content-Type': 'application/json'}
         all_items = []
         last_id = ''
-        while len(all_items) < 5000:  # максимум 5000 для создания теста
-            r = req.post(
-                f'{OZON_API_URL}/v3/product/list',
-                headers=headers_k,
-                json={
-                    'filter': {},
-                    'last_id': last_id,
-                    'limit': 1000
-                },
-                timeout=15
-            )
+        while len(all_items) < 3000:
+            r = req.post(f'{OZON_API_URL}/v3/product/list', headers=hk,
+                json={'filter': {'visibility': 'IN_SALE'}, 'last_id': last_id, 'limit': 1000},
+                timeout=15)
             if r.status_code != 200:
                 break
             result = r.json().get('result', {})
-            items = result.get('items', [])
+            items  = result.get('items', [])
             all_items.extend(items)
             last_id = result.get('last_id', '')
             if not last_id or len(items) < 1000:
                 break
-            _time.sleep(0.3)  # небольшая пауза
-
-        # Шаг 2: получаем детали пачками по 100
-        for i in range(0, min(len(all_items), 2000), 100):
+            _time.sleep(0.3)
+        for i in range(0, min(len(all_items), 3000), 100):
             batch = all_items[i:i+100]
-            ids = [int(x['product_id']) for x in batch]
-            r2 = req.post(
-                f'{OZON_API_URL}/v2/product/info/list',
-                headers=headers_k,
-                json={'product_id': ids},
-                timeout=15
-            )
+            r2 = req.post(f'{OZON_API_URL}/v2/product/info/list', headers=hk,
+                json={'product_id': [int(x['product_id']) for x in batch]}, timeout=15)
             if r2.status_code == 200:
                 products.extend(r2.json().get('result', {}).get('items', []))
             _time.sleep(0.2)
@@ -453,20 +478,37 @@ def new_test():
         for k in active_keys
     )
 
-    # Строим список товаров
+    # Строим список товаров с остатками + поле ручного ввода SKU
     if products:
-        prod_opts = ''.join(
+        prod_opts = '<option value="">— Выберите товар из списка —</option>' + ''.join(
             '<option value="{sku}|{name}">{name} (SKU: {sku})</option>'.format(
                 sku=p.get('offer_id', ''),
-                name=p.get('name', 'Без названия')[:60]
+                name=p.get('name', 'Без названия')[:70]
             )
             for p in products
         )
-        prod_select = f'<select name="product" class="fi" required>{prod_opts}</select>'
-        prod_hint   = f'Загружено {len(products)} товаров из Озона'
+        prod_count = len(products)
+        prod_block = (
+            '<select name="product" id="product_select" class="fi" onchange="onSelectProduct(this)">'
+            + prod_opts + '</select>'
+            '<div style="text-align:center;color:#888;font-size:.85rem;margin:.5rem 0">или введите SKU вручную</div>'
+            '<div style="display:flex;gap:.5rem">'
+            '<input type="text" id="manual_sku" class="fi" placeholder="Введите SKU товара" style="flex:1">'
+            '<button type="button" onclick="checkManualSku()" class="btn bp" style="white-space:nowrap">Найти</button>'
+            '</div>'
+            '<div id="sku_check_result" style="margin-top:.5rem;font-size:.85rem"></div>'
+        )
+        prod_hint = (
+            f'Загружено {prod_count} товаров с остатками. '
+            'Если нужного товара нет — введите SKU вручную для проверки.'
+        )
     else:
-        prod_select = '<input type="text" name="product" class="fi" placeholder="SKU|Название товара" required>'
-        prod_hint   = 'Не удалось загрузить товары — введите вручную в формате SKU|Название'
+        prod_block = (
+            '<input type="text" name="product" id="manual_sku_only" class="fi" '
+            'placeholder="Введите SKU товара" required>'
+        )
+        prod_hint = 'Не удалось загрузить список — введите SKU вручную'
+        prod_count = 0
 
     c = (
         '<div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem">'
@@ -481,9 +523,9 @@ def new_test():
         '<div class="fg"><label>Магазин</label>'
         f'<select name="key_id" class="fi" required>{shops_opts}</select></div>'
 
-        '<div class="fg"><label>Товар</label>'
-        + prod_select +
-        f'<div class="hn">{prod_hint}</div></div>'
+        '<div class="fg"><label>Товар <span style="color:#27ae60;font-size:.85rem">(с остатками)</span></label>'
+        + prod_block +
+        '<div class="hn">' + prod_hint + '</div></div>'
 
         '<div class="fg"><label>Количество вариантов фото <span style="color:#667eea">(от 2 до 10)</span></label>'
         '<select name="variant_count" class="fi" id="vc_select">'
@@ -503,6 +545,38 @@ def new_test():
         '<button class="btn bp" style="width:100%">&#129514; Запустить тест</button>'
         '</form></div>'
 
+        '<script>'
+        'function onSelectProduct(sel) {'
+        '  document.getElementById("manual_sku").value = sel.value.split("|")[0] || "";'
+        '}'
+        'function checkManualSku() {'
+        '  var sku = document.getElementById("manual_sku").value.trim();'
+        '  if (!sku) return;'
+        '  var res = document.getElementById("sku_check_result");'
+        '  res.innerHTML = "&#128269; Проверяем...";'
+        '  fetch("/api/check-sku?sku=" + encodeURIComponent(sku))'
+        '    .then(r => r.json())'
+        '    .then(d => {'
+        '      if (d.found && d.has_stock) {'
+        '        res.innerHTML = "<span style=color:#27ae60>&#10003; Товар найден: " + d.name + "</span>";'
+        '        // Добавляем скрытый input с выбранным товаром'
+        '        var old = document.getElementById("manual_product_val");'
+        '        if (old) old.remove();'
+        '        var inp = document.createElement("input");'
+        '        inp.type="hidden"; inp.name="product"; inp.id="manual_product_val";'
+        '        inp.value = sku + "|" + d.name;'
+        '        document.getElementById("manual_sku").parentElement.parentElement.appendChild(inp);'
+        '      } else if (d.found && !d.has_stock) {'
+        '        res.innerHTML = "<span style=color:#e67e22>&#9888; Товар найден, но нет остатков. "+'
+        '          "Пополните остатки на FBS — и товар появится в списке для тестирования.</span>";'
+        '      } else {'
+        '        res.innerHTML = "<span style=color:#e74c3c>&#10007; Товар с таким SKU не найден</span>";'
+        '      }'
+        '    }).catch(() => { res.innerHTML = "Ошибка проверки"; });'
+        '}'
+        'var sel = document.getElementById("product_select");'
+        'if (sel) sel.addEventListener("change", function() { onSelectProduct(sel); });'
+        '</script>'
         '<script>'
         'function updateVariants() {'
         '  var n = parseInt(document.getElementById("vc_select").value);'
