@@ -527,30 +527,28 @@ def api_products():
         if not all_items:
             return jsonify({'debug': 'no items', 'raw': str(r.json())[:500]})
 
-        # Получаем детали первых 20 товаров
+        # Получаем детали первых 20 товаров через актуальный эндпоинт
         batch = all_items[:20]
-        r2 = req.post(f'{OZON_API_URL}/v2/product/info/list', headers=hk,
+        r2 = req.post(f'{OZON_API_URL}/v3/product/info/list', headers=hk,
             json={'product_id': [int(x['product_id']) for x in batch]}, timeout=15)
 
         if r2.status_code != 200:
-            return jsonify({'error': f'info/list {r2.status_code}: {r2.text[:200]}'})
+            return jsonify({'error': f'info/list v3 {r2.status_code}: {r2.text[:300]}'})
 
         raw_items = r2.json().get('result', {}).get('items', [])
         if raw_items:
-            # Показываем первый товар для отладки
             first = raw_items[0]
             return jsonify({
                 'debug': True,
                 'total_ids': len(all_items),
-                'first_product': {
-                    'name': first.get('name',''),
-                    'offer_id': first.get('offer_id',''),
-                    'images_key': list(first.keys()),
-                    'images': first.get('images',''),
-                    'primary_image': first.get('primary_image',''),
-                }
+                'first_product_keys': list(first.keys()),
+                'name': first.get('name',''),
+                'offer_id': first.get('offer_id',''),
+                'images': first.get('images',''),
+                'primary_image': first.get('primary_image',''),
+                'images360': first.get('images360',''),
             })
-        return jsonify({'debug': 'got items but empty', 'count': len(raw_items)})
+        return jsonify({'debug': 'empty items', 'raw': str(r2.json())[:300]})
     except Exception as e:
         return jsonify({'error': str(e)})
 
@@ -574,7 +572,7 @@ def check_sku():
 
     hk = {'Client-Id': key['client_id'], 'Api-Key': key['api_key'], 'Content-Type': 'application/json'}
     try:
-        r = req.post(f'{OZON_API_URL}/v2/product/info/list', headers=hk,
+        r = req.post(f'{OZON_API_URL}/v3/product/info/list', headers=hk,
             json={'offer_id': [sku]}, timeout=10)
         if r.status_code == 200:
             items = r.json().get('result', {}).get('items', [])
