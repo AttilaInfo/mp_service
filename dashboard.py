@@ -11,7 +11,8 @@ dashboard_bp = Blueprint('dashboard', __name__)
 
 
 def get_analytics(client_id, api_key, date_from, date_to):
-    """Получить аналитику с Озона за период. Два запроса: трафик + продажи."""
+    """Получить аналитику с Озона за период. Один запрос со всеми метриками."""
+    import time
     headers = {
         'Client-Id': client_id,
         'Api-Key': api_key,
@@ -24,21 +25,45 @@ def get_analytics(client_id, api_key, date_from, date_to):
         'limit': 1000
     }
 
-    # Запрос 1: просмотры и клики
+    # Один запрос со всеми нужными метриками
     rows_traffic = []
+    rows_sales = []
+
+    # Пробуем получить всё одним запросом
     try:
         r = req.post(f'{OZON_API_URL}/v1/analytics/data', headers=headers,
-            json={**base, 'metrics': ['hits_view_pdp', 'hits_tocart']}, timeout=10)
+            json={**base, 'metrics': ['hits_view_pdp', 'hits_tocart', 'revenue', 'ordered_units']},
+            timeout=15)
         if r.status_code == 200:
-            rows_traffic = r.json().get('result', {}).get('data', [])
+            data = r.json().get('result', {}).get('data', [])
+            if data:
+                # Все 4 метрики в одном запросе
+                combined = []
+                for row in data:
+                    date = (row.get('dimensions') or [{}])[0].get('id', '')[:10]
+                    m = row.get('metrics', [])
+                    combined.append({
+                        'date': date,
+                        'views':   int((m[0] or 0) if len(m) > 0 else 0),
+                        'clicks':  int((m[1] or 0) if len(m) > 1 else 0),
+                        'revenue': float((m[2] or 0) if len(m) > 2 else 0),
+                        'orders':  int((m[3] or 0) if len(m) > 3 else 0),
+                    })
+                return combined
+        elif r.status_code == 429:
+            time.sleep(2)
     except Exception:
         pass
 
-    # Запрос 2: выручка и заказы
-    rows_sales = []
+    # Если не получилось — пробуем по частям с паузой
     try:
         r = req.post(f'{OZON_API_URL}/v1/analytics/data', headers=headers,
-            json={**base, 'metrics': ['revenue', 'ordered_units']}, timeout=10)
+            json={**base, 'metrics': ['hits_view_pdp', 'hits_tocart']}, timeout=15)
+        if r.status_code == 200:
+            rows_traffic = r.json().get('result', {}).get('data', [])
+        time.sleep(1)  # пауза между запросами
+        r = req.post(f'{OZON_API_URL}/v1/analytics/data', headers=headers,
+            json={**base, 'metrics': ['revenue', 'ordered_units']}, timeout=15)
         if r.status_code == 200:
             rows_sales = r.json().get('result', {}).get('data', [])
     except Exception:
@@ -364,18 +389,26 @@ def new_test():
 
     err = request.args.get('err', '')
 
-    # Загружаем ВСЕ товары с Озона (постранично)
+    # Загружаем только товары С ОСТАТКАМИ (оптимизация для больших каталогов)
     key = active_keys[0]
     products = []
     try:
-        headers = {'Client-Id': key['client_id'], 'Api-Key': key['api_key'], 'Content-Type': 'application/json'}
+        import time as _time
+        headers_k = {'Client-Id': key['client_id'], 'Api-Key': key['api_key'], 'Content-Type': 'application/json'}
+
+        # Шаг 1: получаем товары с ненулевым остатком через stocks
+        # Фильтр visibility: IN_SALE — только товары в продаже с остатками
         all_items = []
         last_id = ''
-        while True:
+        while len(all_items) < 5000:  # максимум 5000 для создания теста
             r = req.post(
                 f'{OZON_API_URL}/v3/product/list',
-                headers=headers,
-                json={'filter': {}, 'last_id': last_id, 'limit': 1000},
+                headers=headers_k,
+                json={
+                    'filter': {'visibility': 'IN_SALE'},
+                    'last_id': last_id,
+                    'limit': 1000
+                },
                 timeout=15
             )
             if r.status_code != 200:
@@ -386,18 +419,21 @@ def new_test():
             last_id = result.get('last_id', '')
             if not last_id or len(items) < 1000:
                 break
-        # Получаем детали пачками по 100
-        for i in range(0, min(len(all_items), 1000), 100):
+            _time.sleep(0.3)  # небольшая пауза
+
+        # Шаг 2: получаем детали пачками по 100
+        for i in range(0, min(len(all_items), 2000), 100):
             batch = all_items[i:i+100]
             ids = [int(x['product_id']) for x in batch]
             r2 = req.post(
                 f'{OZON_API_URL}/v2/product/info/list',
-                headers=headers,
+                headers=headers_k,
                 json={'product_id': ids},
                 timeout=15
             )
             if r2.status_code == 200:
                 products.extend(r2.json().get('result', {}).get('items', []))
+            _time.sleep(0.2)
     except Exception:
         pass
 
