@@ -527,28 +527,41 @@ def api_products():
         if not all_items:
             return jsonify({'debug': 'no items', 'raw': str(r.json())[:500]})
 
-        # Получаем детали первых 20 товаров через актуальный эндпоинт
-        batch = all_items[:20]
-        r2 = req.post(f'{OZON_API_URL}/v3/product/info/list', headers=hk,
-            json={'product_id': [int(x['product_id']) for x in batch]}, timeout=15)
+        # Собираем полный список постранично
+        while len(all_items) < 2000:
+            r_next = req.post(f'{OZON_API_URL}/v3/product/list', headers=hk,
+                json={'filter': {'visibility': 'IN_SALE'}, 'last_id': result.get('last_id',''), 'limit': 1000},
+                timeout=15)
+            if r_next.status_code != 200:
+                break
+            res_next = r_next.json().get('result', {})
+            more = res_next.get('items', [])
+            all_items.extend(more)
+            if not res_next.get('last_id') or len(more) < 1000:
+                break
+            _t.sleep(0.3)
 
-        if r2.status_code != 200:
-            return jsonify({'error': f'info/list v3 {r2.status_code}: {r2.text[:300]}'})
+        # Получаем названия через v3/product/info/list (возвращает items напрямую)
+        products = []
+        for i in range(0, min(len(all_items), 2000), 100):
+            batch = all_items[i:i+100]
+            r2 = req.post(f'{OZON_API_URL}/v3/product/info/list', headers=hk,
+                json={'product_id': [int(x['product_id']) for x in batch]}, timeout=15)
+            if r2.status_code == 200:
+                # v3 возвращает items напрямую или через result
+                resp = r2.json()
+                items2 = (resp.get('result') or {}).get('items') or resp.get('items') or []
+                for p in items2:
+                    # Картинки через отдельный запрос не нужны — используем CDN Озона
+                    pid = p.get('id') or p.get('product_id', '')
+                    products.append({
+                        'sku':  p.get('offer_id', ''),
+                        'name': p.get('name', '')[:80],
+                        'img':  f'https://cdn1.ozone.ru/s3/multimedia-{str(pid)[-1]}/{pid}.jpg' if pid else ''
+                    })
+            _t.sleep(0.2)
 
-        raw_items = r2.json().get('result', {}).get('items', [])
-        if raw_items:
-            first = raw_items[0]
-            return jsonify({
-                'debug': True,
-                'total_ids': len(all_items),
-                'first_product_keys': list(first.keys()),
-                'name': first.get('name',''),
-                'offer_id': first.get('offer_id',''),
-                'images': first.get('images',''),
-                'primary_image': first.get('primary_image',''),
-                'images360': first.get('images360',''),
-            })
-        return jsonify({'debug': 'empty items', 'raw': str(r2.json())[:300]})
+        return jsonify(products)
     except Exception as e:
         return jsonify({'error': str(e)})
 
