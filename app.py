@@ -10,6 +10,9 @@ from landing   import landing_bp
 from auth      import auth_bp
 from dashboard import dashboard_bp
 from api_keys  import api_keys_bp
+from uploads import uploads_bp
+
+app.register_blueprint(uploads_bp)
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
