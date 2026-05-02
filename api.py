@@ -190,39 +190,83 @@ function handleDrop(e) {
   handleFiles(e.dataTransfer.files);
 }
 
-// Валидация формы перед отправкой
+// ── Toast-уведомления (вместо alert) ──────────────────────────────────────
+function showToast(msg, type) {
+  var existing = document.getElementById('form_toast');
+  if (existing) existing.remove();
+  var colors = {
+    error:   { bg: '#fff0f0', border: '#ffb3b3', icon: '&#9888;', text: '#c0392b' },
+    warning: { bg: '#fff8e1', border: '#ffe082', icon: '&#9201;', text: '#7d5a00' },
+    success: { bg: '#f0fdf4', border: '#86efac', icon: '&#10003;', text: '#166534' }
+  };
+  var c = colors[type] || colors.error;
+  var toast = document.createElement('div');
+  toast.id = 'form_toast';
+  toast.style.cssText = [
+    'position:fixed', 'bottom:2rem', 'left:50%', 'transform:translateX(-50%)',
+    'background:' + c.bg, 'border:1.5px solid ' + c.border,
+    'color:' + c.text, 'font-weight:600', 'font-size:.95rem',
+    'padding:.85rem 1.4rem', 'border-radius:12px',
+    'box-shadow:0 4px 24px rgba(0,0,0,.13)',
+    'z-index:9999', 'display:flex', 'align-items:center', 'gap:.6rem',
+    'max-width:90vw', 'animation:toastIn .2s ease'
+  ].join(';');
+  toast.innerHTML = '<span style="font-size:1.15rem">' + c.icon + '</span><span>' + msg + '</span>';
+  if (!document.getElementById('toast_style')) {
+    var s = document.createElement('style');
+    s.id = 'toast_style';
+    s.textContent = '@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}';
+    document.head.appendChild(s);
+  }
+  document.body.appendChild(toast);
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(function(){ if(toast.parentNode) toast.remove(); }, 4000);
+}
+
+// ── Валидация формы перед отправкой ───────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
   var form = document.getElementById('test_form');
   if (!form) return;
   form.addEventListener('submit', function(e) {
-    // Проверяем товар
+
+    // 1. Проверяем товар
     var product = document.getElementById('product_val');
     if (!product || !product.value.trim()) {
       e.preventDefault();
-      alert('Выберите товар для теста');
+      showToast('Выберите товар для теста', 'error');
+      var ps = document.getElementById('prod_search');
+      if (ps) ps.focus();
       return;
     }
-    // Считаем варианты с заполненным фото
-    var filled = 0;
-    var empty = [];
-    for (var i = 1; i <= 10; i++) {
-      var inp = document.querySelector('input[name="photo_' + i + '"]');
-      if (!inp) break;
-      if (inp.value.trim()) {
-        filled++;
-      } else {
-        empty.push(i);
-      }
-    }
+
+    // 2. Берём только карточки реально в гриде
+    var grid = document.getElementById('variants_grid');
+    var cards = grid ? Array.from(grid.children) : [];
+    var filled = 0, uploading = 0;
+    cards.forEach(function(card) {
+      var inp = card.querySelector('input[type="hidden"][name^="photo_"]');
+      if (!inp) return;
+      if (inp.value.trim()) { filled++; }
+      else { uploading++; }
+    });
+
     if (filled < 2) {
       e.preventDefault();
-      alert('Добавьте минимум 2 варианта фото');
+      showToast('Добавьте минимум 2 варианта фото', 'error');
       return;
     }
-    if (empty.length > 0) {
+    if (uploading > 0) {
       e.preventDefault();
-      alert('Фото ещё загружаются, подождите несколько секунд и попробуйте снова');
+      showToast('Фото ещё загружаются — подождите пару секунд ⏳', 'warning');
       return;
+    }
+
+    // 3. Всё ок — индикатор загрузки на кнопке
+    var btn = form.querySelector('button.btn.bp');
+    if (btn) {
+      btn.disabled = true;
+      btn.style.opacity = '.7';
+      btn.innerHTML = '⏳ Создаём тест...';
     }
   });
 });
