@@ -44,7 +44,11 @@ def tests():
                 '<td style="text-align:center">' + str(t.get('variant_count', 0)) + '</td>'
                 '<td>' + status_badge + '</td>'
                 '<td>' + str(t['created_at'])[:10] + '</td>'
-                '<td><a href="/tests/' + str(t['id']) + '" class="btn bp" style="padding:.4rem .9rem;font-size:.82rem">Подробнее</a></td>'
+                '<td style="display:flex;gap:.4rem;flex-wrap:wrap">'
+                '<a href="/tests/' + str(t['id']) + '" class="btn bp" style="padding:.4rem .9rem;font-size:.82rem">Подробнее</a>'
+                + (('<a href="/tests/' + str(t['id']) + '/edit" class="btn" style="padding:.4rem .9rem;font-size:.82rem;background:#fff3cd;border:1px solid #ffc107;color:#856404">&#9998; Изменить</a>') if t['status'] == 'running' else '') +
+                (('<form method="POST" action="/tests/' + str(t['id']) + '/delete" style="margin:0"><button class="btn bd" style="padding:.4rem .9rem;font-size:.82rem" onclick="return confirm(&apos;Удалить тест и все данные?&apos;)">&#128465; Удалить</button></form>') if t['status'] != 'running' else '') +
+                '</td>'
                 '</tr>'
             )
         c += '</table></div>'
@@ -594,6 +598,196 @@ def stop_test(test_id):
         return redirect('/login')
     db.finish_test(test_id, u['id'])
     return redirect(f'/tests/{test_id}')
+
+
+
+@tests_bp.route('/tests/<int:test_id>/edit')
+def edit_test(test_id):
+    u = me()
+    if not u:
+        return redirect('/login')
+
+    test = db.get_test(test_id, u['id'])
+    if not test or test['status'] != 'running':
+        return redirect('/tests')
+
+    err = request.args.get('err', '')
+    err_html = f'<div class="al er">{err}</div>' if err else ''
+    strategy = test.get('strategy') or 'time:30m'
+
+    # Парсим текущую стратегию
+    if strategy.startswith('time:'):
+        cur_type = 'time'
+        cur_val  = strategy[5:].rstrip('m')
+    elif strategy.startswith('views:'):
+        cur_type = 'views'
+        cur_val  = strategy[6:]
+    elif strategy.startswith('clicks:'):
+        cur_type = 'clicks'
+        cur_val  = strategy[7:]
+    else:
+        cur_type, cur_val = 'time', '30'
+
+    variants = db.get_variants(test_id)
+
+    c = f"""
+<div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem">
+  <a href="/tests/{test_id}" class="btn" style="background:#f0f2f5;border:1px solid #ddd;color:#444">&#8592; Назад</a>
+  <p class="ttl" style="margin:0">&#9998; Редактирование теста</p>
+</div>
+{err_html}
+<div class="box">
+  <p style="color:#666;margin-bottom:1.5rem">
+    <strong>{test['product_name']}</strong><br>
+    <small style="color:#999">SKU: {test['sku']} · {test['shop_name']}</small>
+  </p>
+
+  <form method="POST" action="/tests/{test_id}/edit">
+
+    <!-- Стратегия -->
+    <div class="fg">
+      <label>Стратегия ротации</label>
+
+      <div id="s_time" onclick="selS('time')"
+        style="border:2px solid {'#667eea' if cur_type=='time' else '#ddd'};border-radius:10px;padding:.85rem 1rem;margin-bottom:.6rem;cursor:pointer;background:{'#f5f3ff' if cur_type=='time' else '#fafafa'}">
+        <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.3rem">
+          <input type="radio" name="strategy" value="time" id="r_time" {'checked' if cur_type=='time' else ''} style="accent-color:#667eea">
+          <label for="r_time" style="font-weight:600;cursor:pointer">&#9201; По времени</label>
+        </div>
+        <div id="s_time_f" style="display:{'flex' if cur_type=='time' else 'none'};align-items:center;gap:.5rem;margin-top:.4rem">
+          <span style="font-size:.9rem;color:#555">каждые</span>
+          <input type="number" name="rotation_minutes" id="rot_min" value="{cur_val if cur_type=='time' else '30'}"
+            min="15" max="10080" class="fi" style="width:90px;padding:.4rem .6rem" onclick="event.stopPropagation()">
+          <span style="font-size:.9rem;color:#555">минут</span>
+        </div>
+      </div>
+
+      <div id="s_views" onclick="selS('views')"
+        style="border:2px solid {'#667eea' if cur_type=='views' else '#ddd'};border-radius:10px;padding:.85rem 1rem;margin-bottom:.6rem;cursor:pointer;background:{'#f5f3ff' if cur_type=='views' else '#fafafa'}">
+        <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.3rem">
+          <input type="radio" name="strategy" value="views" id="r_views" {'checked' if cur_type=='views' else ''} style="accent-color:#667eea">
+          <label for="r_views" style="font-weight:600;cursor:pointer">&#128065; По показам</label>
+        </div>
+        <div id="s_views_f" style="display:{'flex' if cur_type=='views' else 'none'};align-items:center;gap:.5rem;margin-top:.4rem">
+          <span style="font-size:.9rem;color:#555">каждые</span>
+          <input type="number" name="rotation_views" id="rot_views" value="{cur_val if cur_type=='views' else '100'}"
+            min="50" max="10000" class="fi" style="width:100px;padding:.4rem .6rem" onclick="event.stopPropagation()">
+          <span style="font-size:.9rem;color:#555">показов</span>
+        </div>
+      </div>
+
+      <div id="s_clicks" onclick="selS('clicks')"
+        style="border:2px solid {'#667eea' if cur_type=='clicks' else '#ddd'};border-radius:10px;padding:.85rem 1rem;margin-bottom:.6rem;cursor:pointer;background:{'#f5f3ff' if cur_type=='clicks' else '#fafafa'}">
+        <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.3rem">
+          <input type="radio" name="strategy" value="clicks" id="r_clicks" {'checked' if cur_type=='clicks' else ''} style="accent-color:#667eea">
+          <label for="r_clicks" style="font-weight:600;cursor:pointer">&#128717; По кликам</label>
+        </div>
+        <div id="s_clicks_f" style="display:{'flex' if cur_type=='clicks' else 'none'};align-items:center;gap:.5rem;margin-top:.4rem">
+          <span style="font-size:.9rem;color:#555">каждые</span>
+          <input type="number" name="rotation_clicks" id="rot_clicks" value="{cur_val if cur_type=='clicks' else '20'}"
+            min="20" max="10000" class="fi" style="width:100px;padding:.4rem .6rem" onclick="event.stopPropagation()">
+          <span style="font-size:.9rem;color:#555">кликов</span>
+        </div>
+      </div>
+    </div>
+
+    <script>
+    function selS(v) {{
+      ['time','views','clicks'].forEach(function(x) {{
+        var b = document.getElementById('s_'+x);
+        var f = document.getElementById('s_'+x+'_f');
+        var r = document.getElementById('r_'+x);
+        var on = x===v;
+        r.checked = on;
+        b.style.borderColor = on ? '#667eea' : '#ddd';
+        b.style.background   = on ? '#f5f3ff' : '#fafafa';
+        if(f) f.style.display = on ? 'flex' : 'none';
+      }});
+    }}
+    ['r_time','r_views','r_clicks'].forEach(function(id){{
+      var el = document.getElementById(id);
+      if(el) el.addEventListener('click', function(e){{ e.stopPropagation(); selS(this.value); }});
+    }});
+    </script>
+
+    <!-- Текущие варианты (только просмотр) -->
+    <div class="fg">
+      <label>Варианты фото <span style="color:#aaa;font-size:.82rem">(изменение вариантов недоступно для активного теста)</span></label>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:.5rem;margin-top:.5rem">
+"""
+    for i, v in enumerate(variants):
+        photo = v.get('photo_url','')
+        num   = i + 1
+        img   = f'<img src="{photo}" style="width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:6px">' if photo.startswith('http') or photo.startswith('/uploads') else '<div style="width:100%;aspect-ratio:3/4;background:#f0f0f0;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#ccc">&#128247;</div>'
+        c += f'<div style="text-align:center"><div style="font-size:.75rem;font-weight:700;color:#667eea;margin-bottom:.2rem">Вариант {num}</div>{img}</div>'
+
+    c += """
+      </div>
+    </div>
+
+    <div style="display:flex;gap:.75rem;margin-top:1rem">
+      <button class="btn bp" style="flex:1">&#10003; Сохранить изменения</button>
+      <a href="/tests/{test_id}" class="btn" style="background:#f0f2f5;border:1px solid #ddd;color:#444;padding:.6rem 1.2rem">Отмена</a>
+    </div>
+  </form>
+</div>
+""".format(test_id=test_id)
+
+    return render(c, 'tests')
+
+
+@tests_bp.route('/tests/<int:test_id>/edit', methods=['POST'])
+def save_test(test_id):
+    u = me()
+    if not u:
+        return redirect('/login')
+
+    test = db.get_test(test_id, u['id'])
+    if not test or test['status'] != 'running':
+        return redirect('/tests')
+
+    strategy = request.form.get('strategy', 'time')
+    if strategy == 'time':
+        try:
+            val = max(15, int(request.form.get('rotation_minutes', 30)))
+        except (ValueError, TypeError):
+            val = 30
+        strategy_str = f'time:{val}m'
+    elif strategy == 'views':
+        try:
+            val = max(50, int(request.form.get('rotation_views', 100)))
+        except (ValueError, TypeError):
+            val = 100
+        strategy_str = f'views:{val}'
+    elif strategy == 'clicks':
+        try:
+            val = max(20, int(request.form.get('rotation_clicks', 20)))
+        except (ValueError, TypeError):
+            val = 20
+        strategy_str = f'clicks:{val}'
+    else:
+        strategy_str = 'time:30m'
+
+    db.update_test_strategy(test_id, u['id'], strategy_str)
+    return redirect(f'/tests/{test_id}')
+
+
+@tests_bp.route('/tests/<int:test_id>/delete', methods=['POST'])
+def delete_test(test_id):
+    u = me()
+    if not u:
+        return redirect('/login')
+
+    test = db.get_test(test_id, u['id'])
+    if not test:
+        return redirect('/tests')
+
+    # Только завершённые тесты можно удалять
+    if test['status'] == 'running':
+        return redirect(f'/tests/{test_id}')
+
+    db.delete_test(test_id, u['id'])
+    return redirect('/tests')
 
 
 # ── Вспомогательная функция форматирования стратегии ──────────────────────
