@@ -137,10 +137,23 @@ function handleFiles(files) {
         addVariantWithUrl(previewUrl, '', false);
         var cardNum = variantCount; // номер только что добавленной карточки
 
-        // Загружаем файл на сервер
-        var fd = new FormData();
-        fd.append('photo', file);
-        fetch('/api/upload-photo', {method: 'POST', body: fd})
+        // Сжимаем изображение перед отправкой (макс 1600px, качество 0.85)
+        var img = new Image();
+        img.onload = function() {
+          var MAX = 1600;
+          var w = img.width, h = img.height;
+          if (w > MAX || h > MAX) {
+            var ratio = Math.min(MAX/w, MAX/h);
+            w = Math.round(w * ratio);
+            h = Math.round(h * ratio);
+          }
+          var canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          canvas.toBlob(function(blob) {
+            var fd = new FormData();
+            fd.append('photo', blob, 'photo.jpg');
+            fetch('/api/upload-photo', {method: 'POST', body: fd})
           .then(function(r){ return r.json(); })
           .then(function(data){
             done++;
@@ -160,6 +173,9 @@ function handleFiles(files) {
             if (done === toAdd && skipped === 0 && notice)
               notice.innerHTML = '<span style="color:#e74c3c;font-size:.95rem;font-weight:600">&#9888; Ошибка загрузки файлов</span>';
           });
+          }, 'image/jpeg', 0.85); // сжимаем в JPEG качество 85%
+        };
+        img.src = e.target.result;
       };
       reader.readAsDataURL(file);
     })(files[i]);
