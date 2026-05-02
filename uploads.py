@@ -22,7 +22,7 @@ from auth import me
 uploads_bp = Blueprint('uploads', __name__)
 
 # ── Константы ─────────────────────────────────────────────────────────────────
-UPLOAD_DIR      = '/tmp/mp_uploads'
+UPLOAD_DIR      = '/data/uploads'
 MAX_FILE_SIZE   = 10 * 1024 * 1024   # 10 МБ — лимит Ozon и Wildberries
 ALLOWED_MIMES   = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
 
