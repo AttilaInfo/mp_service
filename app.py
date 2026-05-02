@@ -1,5 +1,5 @@
 import os
-from flask import Flask
+from flask import Flask, jsonify
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from config import SECRET_KEY, DATABASE_URL
@@ -43,6 +43,19 @@ if DATABASE_URL:
         print(f'Ошибка инициализации БД: {e}')
 else:
     print('ВНИМАНИЕ: DATABASE_URL не задан!')
+
+# ── Health check — Railway переключает трафик только когда это возвращает 200 ──
+@app.route('/healthz')
+def healthz():
+    """
+    Проверяет что приложение и БД живы.
+    Railway ждёт 200 перед переключением трафика на новый деплой.
+    """
+    try:
+        db.get_conn().close()
+        return jsonify({'status': 'ok', 'db': 'ok'}), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'db': str(e)}), 503
 
 @app.errorhandler(404)
 def e404(e):
