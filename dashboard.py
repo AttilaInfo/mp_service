@@ -958,7 +958,7 @@ def new_test():
         <!-- Поле ввода -->
         <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
           <span style="font-size:.9rem;color:#555">или введите вручную:</span>
-          <input type="number" name="rotation_minutes" id="rotation_minutes" value="30" min="1" max="10080"
+          <input type="number" name="rotation_minutes" id="rotation_minutes" value="30" min="15" max="10080"
             class="fi" style="width:90px;padding:.4rem .6rem;font-size:.95rem"
             onclick="event.stopPropagation()" oninput="clearPresets()">
           <span style="font-size:.9rem;color:#555">минут</span>
@@ -973,13 +973,27 @@ def new_test():
         <input type="radio" name="strategy" value="views" id="r_views" style="accent-color:#667eea">
         <label for="r_views" style="font-weight:600;cursor:pointer;font-size:.95rem">&#128065; По количеству показов</label>
       </div>
-      <div style="font-size:.85rem;color:#666;margin-bottom:.7rem">Ротация происходит когда самый слабый вариант наберёт нужное число показов</div>
-      <div id="s_views_fields" style="display:none;align-items:center;gap:.5rem;flex-wrap:wrap">
-        <span style="font-size:.9rem;color:#555">Показов на вариант</span>
-        <input type="number" name="rotation_views" id="rotation_views" value="100" min="10" max="100000"
-          class="fi" style="width:100px;padding:.4rem .6rem;font-size:.95rem"
-          onclick="event.stopPropagation()">
-        <span style="font-size:.8rem;color:#aaa">(рекомендуем от 100)</span>
+      <div style="font-size:.85rem;color:#666;margin-bottom:.7rem">Ротация происходит при достижении карточкой нужного числа показов и продолжается до 10 000 показов на один вариант</div>
+      <div id="s_views_fields" style="display:none;flex-direction:column;gap:.65rem">
+        <!-- Быстрые пресеты показов -->
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap" onclick="event.stopPropagation()">
+          <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer;background:#fff;border:1.5px solid #d0d0d0;border-radius:8px;padding:.35rem .75rem;font-size:.85rem;font-weight:500" id="vpreset_label_200">
+            <input type="checkbox" id="vpreset_200" onchange="applyViewsPreset(this,200)" style="accent-color:#667eea;cursor:pointer"> 200 показов
+          </label>
+          <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer;background:#fff;border:1.5px solid #d0d0d0;border-radius:8px;padding:.35rem .75rem;font-size:.85rem;font-weight:500" id="vpreset_label_500">
+            <input type="checkbox" id="vpreset_500" onchange="applyViewsPreset(this,500)" style="accent-color:#667eea;cursor:pointer"> 500 показов
+          </label>
+          <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer;background:#fff;border:1.5px solid #d0d0d0;border-radius:8px;padding:.35rem .75rem;font-size:.85rem;font-weight:500" id="vpreset_label_1000">
+            <input type="checkbox" id="vpreset_1000" onchange="applyViewsPreset(this,1000)" style="accent-color:#667eea;cursor:pointer"> 1 000 показов
+          </label>
+        </div>
+        <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+          <span style="font-size:.9rem;color:#555">или введите вручную:</span>
+          <input type="number" name="rotation_views" id="rotation_views" value="500" min="50" max="10000"
+            class="fi" style="width:100px;padding:.4rem .6rem;font-size:.95rem"
+            onclick="event.stopPropagation()" oninput="clearViewsPresets()">
+          <span style="font-size:.9rem;color:#555">показов</span>
+        </div>
       </div>
     </div>
 
@@ -1015,6 +1029,26 @@ def new_test():
     // Вставляем значение
     var inp = document.getElementById('rotation_minutes');
     if (inp) inp.value = cb.checked ? PRESETS[key] : 30;
+  }}
+
+  function applyViewsPreset(cb, val) {{
+    [200,500,1000].forEach(function(v) {{
+      var el = document.getElementById('vpreset_' + v);
+      var lbl = document.getElementById('vpreset_label_' + v);
+      if (el && v !== val) el.checked = false;
+      if (lbl) lbl.style.borderColor = (v === val && cb.checked) ? '#667eea' : '#d0d0d0';
+    }});
+    var inp = document.getElementById('rotation_views');
+    if (inp) inp.value = cb.checked ? val : 500;
+  }}
+
+  function clearViewsPresets() {{
+    [200,500,1000].forEach(function(v) {{
+      var el = document.getElementById('vpreset_' + v);
+      var lbl = document.getElementById('vpreset_label_' + v);
+      if (el) el.checked = false;
+      if (lbl) lbl.style.borderColor = '#d0d0d0';
+    }});
   }}
 
   function clearPresets() {{
@@ -1075,7 +1109,7 @@ def create_test():
     rotation_views   = None
     rotation_clicks  = None
     if strategy == 'time':
-        try: rotation_minutes = max(1, int(request.form.get('rotation_minutes', 30)))
+        try: rotation_minutes = max(15, int(request.form.get('rotation_minutes', 30)))
         except: rotation_minutes = 30
     elif strategy == 'views':
         try: rotation_views = max(10, int(request.form.get('rotation_views', 100)))
