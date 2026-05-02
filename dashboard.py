@@ -128,6 +128,30 @@ def sum_metrics(rows, metric_count=4):
     }
 
 
+def format_strategy(s):
+    """Человекочитаемое название стратегии из строки вида time:30m, views:100, clicks:20"""
+    if not s:
+        return 'По времени (30 мин)'
+    if s.startswith('time:'):
+        mins = s.split(':')[1].replace('m','')
+        try:
+            m = int(mins)
+            if m < 60:   return f'По времени — каждые {m} мин'
+            if m < 1440: return f'По времени — каждые {m//60} ч {m%60} мин'.replace(' 0 мин','')
+            return f'По времени — каждые {m//1440} дн'
+        except:
+            return f'По времени ({mins} мин)'
+    if s.startswith('views:'):
+        return f'По показам — {s.split(":")[1]} показов'
+    if s.startswith('clicks:'):
+        return f'По кликам — {s.split(":")[1]} кликов'
+    # Старые значения
+    if s == 'round_robin': return 'Round Robin (равномерно)'
+    if s == 'random':      return 'Случайная'
+    if s == 'best_ctr':    return 'Лучший CTR'
+    return s
+
+
 def fmt_num(n):
     """Форматировать число с пробелами: 12345 → 12 345"""
     return f'{int(n):,}'.replace(',', ' ')
@@ -481,14 +505,14 @@ function handleFiles(files) {
   if (notice) notice.innerHTML = '';
   var available = MAX_VARIANTS - variantCount;
   if (available <= 0) {
-    if (notice) notice.innerHTML = '<span style="color:#e74c3c">&#9888; Достигнут лимит 10 вариантов</span>';
+    if (notice) notice.innerHTML = '<span style="color:#e74c3c;font-size:.95rem;font-weight:600">&#9888; Достигнут лимит 10 вариантов</span>';
     return;
   }
   var toAdd = Math.min(files.length, available);
   var skipped = files.length - toAdd;
 
   if (skipped > 0 && notice) {
-    notice.innerHTML = '<span style="color:#e67e22">&#9888; Добавлено ' + toAdd + ' из ' + files.length + ' — лимит 10 вариантов</span>';
+    notice.innerHTML = '<span style="color:#e67e22;font-size:.95rem;font-weight:600">&#9888; Добавлено ' + toAdd + ' из ' + files.length + ' — лимит 10 вариантов</span>';
   }
 
   for (var i = 0; i < toAdd; i++) {
@@ -899,19 +923,90 @@ def new_test():
       </button>
       <input type="file" id="file_inp" accept="image/*" multiple style="display:none" onchange="handleFiles(this.files)">
       <span id="variant_count_label" style="font-size:.82rem;color:#888">Добавлено: 1 из 10</span>
-      <span id="files_notice" style="font-size:.82rem"></span>
+      <span id="files_notice" style="font-size:.95rem;font-weight:600"></span>
     </div>
   </div>
 
   <!-- Стратегия -->
-  <div class="fg"><label>Стратегия ротации</label>
-    <select name="strategy" class="fi">
-      <option value="round_robin">По очереди (Round Robin) — равномерно</option>
-      <option value="random">Случайная</option>
-      <option value="best_ctr">Лучший CTR — больше показов победителю</option>
-    </select>
-    <div class="hn">Round Robin рекомендуется для новых тестов</div>
+  <div class="fg">
+    <label>Стратегия смены фото</label>
+
+    <!-- Вариант 1: по времени -->
+    <div class="strategy-option" id="s_time" onclick="selectStrategy('time')"
+      style="border:2px solid #667eea;border-radius:10px;padding:1rem;margin-bottom:.6rem;cursor:pointer;background:#f5f3ff">
+      <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.4rem">
+        <input type="radio" name="strategy" value="time" id="r_time" checked style="accent-color:#667eea">
+        <label for="r_time" style="font-weight:600;cursor:pointer;font-size:.95rem">&#9201; По времени</label>
+      </div>
+      <div style="font-size:.85rem;color:#666;margin-bottom:.7rem">Каждый вариант показывается заданное время, затем автоматически меняется</div>
+      <div id="s_time_fields" style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+        <span style="font-size:.9rem;color:#555">Менять каждые</span>
+        <input type="number" name="rotation_minutes" id="rotation_minutes" value="30" min="1" max="10080"
+          class="fi" style="width:90px;padding:.4rem .6rem;font-size:.95rem"
+          onclick="event.stopPropagation()">
+        <span style="font-size:.9rem;color:#555">минут</span>
+        <span style="font-size:.8rem;color:#aaa">(мин: 1, макс: 10 080 = 1 неделя)</span>
+      </div>
+    </div>
+
+    <!-- Вариант 2: по показам -->
+    <div class="strategy-option" id="s_views" onclick="selectStrategy('views')"
+      style="border:2px solid #ddd;border-radius:10px;padding:1rem;margin-bottom:.6rem;cursor:pointer;background:#fafafa">
+      <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.4rem">
+        <input type="radio" name="strategy" value="views" id="r_views" style="accent-color:#667eea">
+        <label for="r_views" style="font-weight:600;cursor:pointer;font-size:.95rem">&#128065; По количеству показов</label>
+      </div>
+      <div style="font-size:.85rem;color:#666;margin-bottom:.7rem">Ротация происходит когда самый слабый вариант наберёт нужное число показов</div>
+      <div id="s_views_fields" style="display:none;align-items:center;gap:.5rem;flex-wrap:wrap">
+        <span style="font-size:.9rem;color:#555">Показов на вариант</span>
+        <input type="number" name="rotation_views" id="rotation_views" value="100" min="10" max="100000"
+          class="fi" style="width:100px;padding:.4rem .6rem;font-size:.95rem"
+          onclick="event.stopPropagation()">
+        <span style="font-size:.8rem;color:#aaa">(рекомендуем от 100)</span>
+      </div>
+    </div>
+
+    <!-- Вариант 3: по кликам -->
+    <div class="strategy-option" id="s_clicks" onclick="selectStrategy('clicks')"
+      style="border:2px solid #ddd;border-radius:10px;padding:1rem;margin-bottom:.6rem;cursor:pointer;background:#fafafa">
+      <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.4rem">
+        <input type="radio" name="strategy" value="clicks" id="r_clicks" style="accent-color:#667eea">
+        <label for="r_clicks" style="font-weight:600;cursor:pointer;font-size:.95rem">&#128717; По количеству кликов</label>
+      </div>
+      <div style="font-size:.85rem;color:#666;margin-bottom:.7rem">Ротация происходит когда самый слабый вариант наберёт нужное число кликов в корзину</div>
+      <div id="s_clicks_fields" style="display:none;align-items:center;gap:.5rem;flex-wrap:wrap">
+        <span style="font-size:.9rem;color:#555">Кликов на вариант</span>
+        <input type="number" name="rotation_clicks" id="rotation_clicks" value="20" min="1" max="10000"
+          class="fi" style="width:100px;padding:.4rem .6rem;font-size:.95rem"
+          onclick="event.stopPropagation()">
+        <span style="font-size:.8rem;color:#aaa">(рекомендуем от 20)</span>
+      </div>
+    </div>
   </div>
+
+  <script>
+  function selectStrategy(val) {{
+    ['time','views','clicks'].forEach(function(v) {{
+      var opt = document.getElementById('s_' + v);
+      var fields = document.getElementById('s_' + v + '_fields');
+      var radio = document.getElementById('r_' + v);
+      var active = (v === val);
+      radio.checked = active;
+      opt.style.borderColor = active ? '#667eea' : '#ddd';
+      opt.style.background = active ? '#f5f3ff' : '#fafafa';
+      if (fields) fields.style.display = active ? 'flex' : 'none';
+    }});
+  }}
+  // Клик по радио не должен срабатывать дважды
+  ['r_time','r_views','r_clicks'].forEach(function(id) {{
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('click', function(e) {{
+      e.stopPropagation();
+      selectStrategy(this.value);
+    }});
+  }});
+  </script>
+
   <button class="btn bp" style="width:100%">&#129514; Запустить тест</button>
 </form>
 </div>
@@ -931,8 +1026,32 @@ def create_test():
 
     key_id        = request.form.get('key_id')
     product_raw   = request.form.get('product', '')
-    strategy      = request.form.get('strategy', 'round_robin')
+    strategy      = request.form.get('strategy', 'time')
     variant_count = int(request.form.get('variant_count', 2))
+
+    # Параметры стратегии
+    rotation_minutes = None
+    rotation_views   = None
+    rotation_clicks  = None
+    if strategy == 'time':
+        try: rotation_minutes = max(1, int(request.form.get('rotation_minutes', 30)))
+        except: rotation_minutes = 30
+    elif strategy == 'views':
+        try: rotation_views = max(10, int(request.form.get('rotation_views', 100)))
+        except: rotation_views = 100
+    elif strategy == 'clicks':
+        try: rotation_clicks = max(1, int(request.form.get('rotation_clicks', 20)))
+        except: rotation_clicks = 20
+
+    # Формируем строку стратегии с параметром для хранения
+    if strategy == 'time':
+        strategy_str = f'time:{rotation_minutes}m'
+    elif strategy == 'views':
+        strategy_str = f'views:{rotation_views}'
+    elif strategy == 'clicks':
+        strategy_str = f'clicks:{rotation_clicks}'
+    else:
+        strategy_str = strategy
 
     # Парсим товар
     if '|' in product_raw:
@@ -959,7 +1078,7 @@ def create_test():
         variants.append({'label': chr(64 + i), 'photo_url': photo})
 
     # Сохраняем в БД
-    test_id = db.create_test(u['id'], key['shop_name'], sku, product_name, strategy)
+    test_id = db.create_test(u['id'], key['shop_name'], sku, product_name, strategy_str)
     for v in variants:
         db.add_variant(test_id, v['label'], v['photo_url'])
 
@@ -993,7 +1112,7 @@ def test_detail(test_id):
         '<table style="width:auto;margin-bottom:1rem">'
         '<tr><td style="color:#666;padding:.4rem 2rem .4rem 0">SKU:</td><td><strong>' + test['sku'] + '</strong></td></tr>'
         '<tr><td style="color:#666;padding:.4rem 2rem .4rem 0">Магазин:</td><td><strong>' + test['shop_name'] + '</strong></td></tr>'
-        '<tr><td style="color:#666;padding:.4rem 2rem .4rem 0">Стратегия:</td><td><strong>' + test['strategy'] + '</strong></td></tr>'
+        '<tr><td style="color:#666;padding:.4rem 2rem .4rem 0">Стратегия:</td><td><strong>' + format_strategy(test['strategy']) + '</strong></td></tr>'
         '<tr><td style="color:#666;padding:.4rem 2rem .4rem 0">Создан:</td><td><strong>' + str(test['created_at'])[:10] + '</strong></td></tr>'
         '</table>'
 
