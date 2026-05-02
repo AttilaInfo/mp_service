@@ -243,14 +243,12 @@ def new_test():
   var PRESETS = {{ '1h': 60, '4h': 240, '1d': 1440, '1w': 10080 }};
 
   function applyPreset(cb, key) {{
-    // Снимаем остальные галочки
     ['1h','4h','1d','1w'].forEach(function(k) {{
       var el = document.getElementById('preset_' + k);
       var lbl = document.getElementById('preset_label_' + k);
       if (el && k !== key) {{ el.checked = false; }}
       if (lbl) lbl.style.borderColor = (k === key && cb.checked) ? '#667eea' : '#d0d0d0';
     }});
-    // Вставляем значение
     var inp = document.getElementById('rotation_minutes');
     if (inp) inp.value = cb.checked ? PRESETS[key] : 30;
   }}
@@ -316,7 +314,6 @@ def new_test():
       if (fields) fields.style.display = active ? 'flex' : 'none';
     }});
   }}
-  // Клик по радио не должен срабатывать дважды
   ['r_time','r_views','r_clicks'].forEach(function(id) {{
     var el = document.getElementById(id);
     if (el) el.addEventListener('click', function(e) {{
@@ -343,40 +340,42 @@ def create_test():
     if not u:
         return redirect('/login')
 
-    key_id        = request.form.get('key_id')
-    product_raw   = request.form.get('product', '')
-    strategy      = request.form.get('strategy', 'time')
-    # Считаем варианты по переданным photo_N полям
-    variant_count = 0
+    key_id      = request.form.get('key_id')
+    product_raw = request.form.get('product', '')
+    strategy    = request.form.get('strategy', 'time')
+
+    # ── ИСПРАВЛЕНИЕ 1: собираем все непустые photo_N (без break) ──────────
+    photos = []
     for i in range(1, 11):
-        if request.form.get(f'photo_{i}', '').strip():
-            variant_count = i
-        else:
-            break
-    if variant_count < 2:
+        photo = request.form.get(f'photo_{i}', '').strip()
+        if photo:
+            photos.append(photo)
+
+    if len(photos) < 2:
         return redirect('/tests/new?err=Добавьте+минимум+2+варианта+фото')
 
     # Параметры стратегии
-    rotation_minutes = None
-    rotation_views   = None
-    rotation_clicks  = None
     if strategy == 'time':
-        try: rotation_minutes = max(15, int(request.form.get('rotation_minutes', 30)))
-        except: rotation_minutes = 30
-    elif strategy == 'views':
-        try: rotation_views = max(10, int(request.form.get('rotation_views', 100)))
-        except: rotation_views = 100
-    elif strategy == 'clicks':
-        try: rotation_clicks = max(20, int(request.form.get('rotation_clicks', 20)))
-        except: rotation_clicks = 20
+        try:
+            rotation_val = max(15, int(request.form.get('rotation_minutes', 30)))
+        except (ValueError, TypeError):
+            rotation_val = 30
+        strategy_str = f'time:{rotation_val}m'
 
-    # Формируем строку стратегии с параметром для хранения
-    if strategy == 'time':
-        strategy_str = f'time:{rotation_minutes}m'
     elif strategy == 'views':
-        strategy_str = f'views:{rotation_views}'
+        try:
+            rotation_val = max(50, int(request.form.get('rotation_views', 100)))
+        except (ValueError, TypeError):
+            rotation_val = 100
+        strategy_str = f'views:{rotation_val}'
+
     elif strategy == 'clicks':
-        strategy_str = f'clicks:{rotation_clicks}'
+        try:
+            rotation_val = max(20, int(request.form.get('rotation_clicks', 20)))
+        except (ValueError, TypeError):
+            rotation_val = 20
+        strategy_str = f'clicks:{rotation_val}'
+
     else:
         strategy_str = strategy
 
@@ -387,27 +386,23 @@ def create_test():
         sku = product_raw
         product_name = product_raw
 
+    sku          = sku.strip()
+    product_name = product_name.strip()
+
     if not sku or not product_name:
         return redirect('/tests/new?err=Выберите+товар')
 
     # Получаем ключ
     keys = db.get_keys(u['id'])
-    key = next((k for k in keys if str(k['id']) == str(key_id)), None)
+    key  = next((k for k in keys if str(k['id']) == str(key_id)), None)
     if not key:
         return redirect('/tests/new?err=Магазин+не+найден')
 
-    # Собираем варианты
-    variants = []
-    for i in range(1, variant_count + 1):
-        photo = request.form.get(f'photo_{i}', '').strip()
-        if not photo:
-            continue  # пропускаем пустые (не должно быть, но на всякий)
-        variants.append({'label': chr(64 + i), 'photo_url': photo})
-
-    # Сохраняем в БД
+    # ── ИСПРАВЛЕНИЕ 2: сохраняем в БД — убрана несуществующая переменная v ─
     test_id = db.create_test(u['id'], key['shop_name'], sku, product_name, strategy_str)
-    for v in variants:
-        db.add_variant(test_id, v['label'], v['photo_url'])
+    for i, photo_url in enumerate(photos, start=1):
+        label = chr(64 + i)   # A, B, C, …
+        db.add_variant(test_id, label, photo_url)
 
     return redirect(f'/tests/{test_id}')
 
@@ -481,3 +476,26 @@ def stop_test(test_id):
     db.finish_test(test_id, u['id'])
     return redirect(f'/tests/{test_id}')
 
+
+# ── Вспомогательная функция форматирования стратегии ──────────────────────
+def format_strategy(strategy_str):
+    """Преобразует строку стратегии в читаемый вид."""
+    if not strategy_str:
+        return '—'
+    if strategy_str.startswith('time:'):
+        val = strategy_str[5:]
+        minutes = int(val.rstrip('m')) if val.endswith('m') else int(val)
+        if minutes >= 10080:
+            return '⏱ Раз в неделю'
+        if minutes >= 1440:
+            days = minutes // 1440
+            return f'⏱ Каждые {days} дн.'
+        if minutes >= 60:
+            hours = minutes // 60
+            return f'⏱ Каждые {hours} ч.'
+        return f'⏱ Каждые {minutes} мин.'
+    if strategy_str.startswith('views:'):
+        return f'👁 Каждые {strategy_str[6:]} показов'
+    if strategy_str.startswith('clicks:'):
+        return f'🛒 Каждые {strategy_str[7:]} кликов'
+    return strategy_str
