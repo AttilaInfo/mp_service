@@ -22,7 +22,6 @@ uploads_bp = Blueprint('uploads', __name__)
 # ── Константы ──────────────────────────────────────────────────────────────
 UPLOAD_DIR    = '/data/uploads'
 MAX_FILE_SIZE = 10 * 1024 * 1024   # 10 МБ
-TELEGRAPH_URL = 'https://telegra.ph/upload'
 
 MAGIC = {
     b'\xff\xd8\xff':       ('jpg',  'image/jpeg'),
@@ -53,20 +52,21 @@ def _safe_user_dir(user_id: int) -> str:
     return path
 
 
-def _upload_to_telegraph(data: bytes, ext: str) -> str | None:
+def _upload_to_cdn(data: bytes, ext: str) -> str | None:
     """
-    Загружает байты изображения на telegra.ph.
-    Возвращает публичный URL вида https://telegra.ph/file/...
-    или None при ошибке.
+    Пробует загрузить фото на несколько публичных CDN по очереди.
+    Возвращает первый успешный публичный URL или None.
     """
     mime_map = {'jpg': 'image/jpeg', 'png': 'image/png',
                 'webp': 'image/webp', 'gif': 'image/gif'}
     mime = mime_map.get(ext, 'image/jpeg')
+
+    # 1. Telegraph
     try:
         r = req.post(
-            TELEGRAPH_URL,
+            'https://telegra.ph/upload',
             files={'file': (f'photo.{ext}', data, mime)},
-            timeout=30
+            timeout=15
         )
         if r.status_code == 200:
             result = r.json()
@@ -74,9 +74,35 @@ def _upload_to_telegraph(data: bytes, ext: str) -> str | None:
                 path = result[0].get('src', '')
                 if path:
                     return 'https://telegra.ph' + path
-        return None
-    except Exception as e:
-        return None
+    except Exception:
+        pass
+
+    # 2. catbox.moe — анонимный хостинг без регистрации
+    try:
+        r = req.post(
+            'https://catbox.moe/user/api.php',
+            data={'reqtype': 'fileupload'},
+            files={'fileToUpload': (f'photo.{ext}', data, mime)},
+            timeout=20
+        )
+        if r.status_code == 200 and r.text.startswith('https://'):
+            return r.text.strip()
+    except Exception:
+        pass
+
+    # 3. 0x0.st — минималистичный файловый хостинг
+    try:
+        r = req.post(
+            'https://0x0.st',
+            files={'file': (f'photo.{ext}', data, mime)},
+            timeout=20
+        )
+        if r.status_code == 200 and r.text.strip().startswith('https://'):
+            return r.text.strip()
+    except Exception:
+        pass
+
+    return None
 
 
 # ── Загрузка ───────────────────────────────────────────────────────────────
@@ -115,7 +141,7 @@ def upload_photo():
         out.write(data)
 
     # 2. Загружаем на Telegraph (для Озона — нужен публичный URL)
-    public_url = _upload_to_telegraph(data, ext)
+    public_url = _upload_to_cdn(data, ext)
 
     if public_url:
         # Возвращаем публичный URL — Озон сможет его принять
