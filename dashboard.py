@@ -378,6 +378,203 @@ def tests():
 
 
 # ── Создание теста ─────────────────────────────────────────────────────────
+@dashboard_bp.route('/static/variants.js')
+def variants_js():
+    from flask import Response
+    return Response(r"""
+var variantCount = 0;
+var MAX_VARIANTS = 10;
+var MIN_VARIANTS = 2;
+var savedPhotos = [];
+var currentFileDataUrl = null;
+
+function patchSelectProduct() {
+  if (typeof window.selectProduct !== 'function') {
+    setTimeout(patchSelectProduct, 100);
+    return;
+  }
+  var orig = window.selectProduct;
+  window.selectProduct = function(sku, name, img) {
+    orig(sku, name, img);
+    var imgField = document.getElementById('product_img');
+    if (imgField) imgField.value = img || '';
+    if (variantCount === 0) {
+      addVariantWithUrl(img || '', 'текущее фото', true);
+    } else {
+      var prev = document.getElementById('preview_1');
+      if (prev && img) prev.innerHTML = '<img src="' + img + '" style="width:100%;height:100%;object-fit:cover">';
+      var inp = document.querySelector('input[name="photo_1"]');
+      if (inp) inp.value = img || '';
+    }
+  };
+}
+patchSelectProduct();
+
+function addVariantWithUrl(url, hint, isFirst) {
+  if (variantCount >= MAX_VARIANTS) return;
+  variantCount++;
+  var label = String.fromCharCode(64 + variantCount);
+  var grid = document.getElementById('variants_grid');
+  if (!grid) return;
+  var card = document.createElement('div');
+  card.id = 'variant_card_' + variantCount;
+  card.setAttribute('data-num', variantCount);
+  card.style.cssText = 'border:2px solid #e0e0e0;border-radius:10px;overflow:hidden;background:#fff;position:relative';
+  var headerBg = isFirst ? '#27ae60' : '#667eea';
+  var delBtn = variantCount > 1
+    ? '<button type="button" onclick="removeVariant(this)" style="background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;font-size:1.2rem;padding:0;line-height:1">&times;</button>'
+    : '';
+  var previewHtml = url
+    ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'&#128247;\'">'
+    : '&#128247;';
+  var hintHtml = hint ? '<div style="font-size:.72rem;color:#aaa;margin-top:.25rem">' + hint + '</div>' : '';
+  card.innerHTML =
+    '<div style="background:' + headerBg + ';color:#fff;padding:.35rem .7rem;font-size:.82rem;font-weight:700;display:flex;justify-content:space-between;align-items:center">'
+    + '<span>' + label + (isFirst ? ' — текущее' : '') + '</span>' + delBtn + '</div>'
+    + '<div style="padding:.65rem">'
+    + '<div id="preview_' + variantCount + '" style="width:100%;height:130px;background:#f0f2f5;border-radius:6px;margin-bottom:.5rem;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#ccc;font-size:2.5rem">'
+    + previewHtml + '</div>'
+    + '<input type="url" name="photo_' + variantCount + '" value="' + (url || '') + '" class="fi" placeholder="https://..." required style="font-size:.78rem;padding:.4rem .6rem" oninput="livePreview(' + variantCount + ', this.value)">'
+    + hintHtml
+    + '</div>';
+  grid.appendChild(card);
+  updateCountLabel();
+}
+
+function livePreview(n, url) {
+  var prev = document.getElementById('preview_' + n);
+  if (!prev) return;
+  prev.innerHTML = (url && url.startsWith('http'))
+    ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'&#128247;\'">'
+    : '&#128247;';
+}
+
+function removeVariant(btn) {
+  var card = btn.closest('[data-num]');
+  if (card) { card.remove(); updateCountLabel(); }
+}
+
+function updateCountLabel() {
+  var n = document.getElementById('variants_grid').children.length;
+  variantCount = n;
+  var lbl = document.getElementById('variant_count_label');
+  if (lbl) lbl.textContent = 'Добавлено: ' + n + ' из ' + MAX_VARIANTS;
+  var b = document.getElementById('add_variant_btn');
+  if (b) b.style.opacity = n >= MAX_VARIANTS ? '.4' : '1';
+}
+
+// Модальное окно
+function openPhotoModal() {
+  if (variantCount >= MAX_VARIANTS) return;
+  var modal = document.getElementById('photo_modal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  var urlInp = document.getElementById('url_input');
+  if (urlInp) urlInp.value = '';
+  var urlPrev = document.getElementById('url_preview');
+  if (urlPrev) urlPrev.innerHTML = '&#128247;';
+  currentFileDataUrl = null;
+  var dp = document.getElementById('disk_preview');
+  if (dp) dp.style.display = 'none';
+  var cb = document.getElementById('confirm_disk_btn');
+  if (cb) cb.style.display = 'none';
+  switchTab('url');
+  // Вешаем listener на url_input
+  if (urlInp && !urlInp._inited) {
+    urlInp._inited = true;
+    urlInp.addEventListener('input', function() {
+      var prev = document.getElementById('url_preview');
+      if (!prev) return;
+      prev.innerHTML = (this.value && this.value.startsWith('http'))
+        ? '<img src="' + this.value + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'&#128247;\'">'
+        : '&#128247;';
+    });
+  }
+}
+
+function closePhotoModal() {
+  var modal = document.getElementById('photo_modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function switchTab(tab) {
+  ['url','disk','saved'].forEach(function(t) {
+    var panel = document.getElementById('panel_' + t);
+    if (panel) panel.style.display = t === tab ? 'block' : 'none';
+    var btn = document.getElementById('tab_' + t);
+    if (btn) {
+      btn.style.color = t === tab ? '#667eea' : '#888';
+      btn.style.borderBottomColor = t === tab ? '#667eea' : 'transparent';
+      btn.style.fontWeight = t === tab ? '600' : '400';
+    }
+  });
+}
+
+function confirmUrl() {
+  var urlInp = document.getElementById('url_input');
+  var url = urlInp ? urlInp.value.trim() : '';
+  if (!url) { alert('Введите URL фото'); return; }
+  addVariantWithUrl(url, '', false);
+  closePhotoModal();
+}
+
+function handleFile(file) {
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    currentFileDataUrl = e.target.result;
+    var img = document.getElementById('disk_img');
+    if (img) img.src = currentFileDataUrl;
+    var dp = document.getElementById('disk_preview');
+    if (dp) dp.style.display = 'block';
+    var cb = document.getElementById('confirm_disk_btn');
+    if (cb) cb.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  var dz = document.getElementById('drop_zone');
+  if (dz) dz.style.borderColor = '#d0d0d0';
+  var file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) handleFile(file);
+}
+
+function confirmDisk() {
+  if (!currentFileDataUrl) return;
+  savedPhotos.push(currentFileDataUrl);
+  addVariantWithUrl(currentFileDataUrl, '', false);
+  updateSavedGrid();
+  closePhotoModal();
+}
+
+function updateSavedGrid() {
+  var grid = document.getElementById('saved_grid');
+  if (!grid) return;
+  if (!savedPhotos.length) {
+    grid.innerHTML = '<div style="color:#888;font-size:.85rem;padding:1rem;grid-column:1/-1;text-align:center">Нет загруженных фото</div>';
+    return;
+  }
+  grid.innerHTML = savedPhotos.map(function(src, i) {
+    return '<div onclick="selectSaved(' + i + ')" style="cursor:pointer;border-radius:8px;overflow:hidden;height:90px;background:#f0f2f5">'
+      + '<img src="' + src + '" style="width:100%;height:100%;object-fit:cover"></div>';
+  }).join('');
+}
+
+function selectSaved(i) {
+  addVariantWithUrl(savedPhotos[i], '', false);
+  closePhotoModal();
+}
+
+document.addEventListener('click', function(e) {
+  var modal = document.getElementById('photo_modal');
+  if (e.target === modal) closePhotoModal();
+});
+
+    """, mimetype='application/javascript')
+
+
 @dashboard_bp.route('/static/product-search.js')
 def product_search_js():
     from flask import Response
@@ -836,181 +1033,7 @@ def new_test():
   </div>
 </div>
 
-<script>
-var variantCount = 0;
-var MAX_VARIANTS = 10;
-var savedPhotos = [];
-var currentFileDataUrl = null;
 
-// Перехватываем selectProduct после загрузки product-search.js
-function patchSelectProduct() {{
-  if (typeof window.selectProduct !== 'function') {{
-    setTimeout(patchSelectProduct, 100);
-    return;
-  }}
-  var orig = window.selectProduct;
-  window.selectProduct = function(sku, name, img) {{
-    orig(sku, name, img);
-    document.getElementById('product_img').value = img || '';
-    if (variantCount === 0) {{
-      addVariantWithUrl(img || '', 'текущее фото', true);
-    }} else {{
-      var prev = document.getElementById('preview_1');
-      if (prev && img) prev.innerHTML = '<img src="' + img + '" style="width:100%;height:100%;object-fit:cover">';
-      var inp = document.querySelector('input[name="photo_1"]');
-      if (inp) inp.value = img || '';
-    }}
-  }};
-}}
-patchSelectProduct();
-
-function addVariantWithUrl(url, hint, isFirst) {{
-  if (variantCount >= MAX_VARIANTS) return;
-  variantCount++;
-  var label = String.fromCharCode(64 + variantCount);
-  var grid = document.getElementById('variants_grid');
-  var card = document.createElement('div');
-  card.id = 'variant_card_' + variantCount;
-  card.setAttribute('data-num', variantCount);
-  card.style.cssText = 'border:2px solid #e0e0e0;border-radius:10px;overflow:hidden;background:#fff;position:relative';
-  var headerBg = isFirst ? '#27ae60' : '#667eea';
-  var delBtn = variantCount > 1 ? '<button type="button" onclick="removeVariant(this)" style="background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;font-size:1.1rem;padding:0;line-height:1">&times;</button>' : '';
-  card.innerHTML =
-    '<div style="background:' + headerBg + ';color:#fff;padding:.35rem .7rem;font-size:.82rem;font-weight:700;display:flex;justify-content:space-between;align-items:center">'
-    + '<span>' + label + (isFirst ? ' — текущее' : '') + '</span>' + delBtn + '</div>'
-    + '<div style="padding:.65rem">'
-    + '<div id="preview_' + variantCount + '" style="width:100%;height:130px;background:#f0f2f5;border-radius:6px;margin-bottom:.5rem;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#ccc;font-size:2.5rem">'
-    + (url ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'&#128247;\'">' : '&#128247;')
-    + '</div>'
-    + '<input type="url" name="photo_' + variantCount + '" value="' + url + '" class="fi" placeholder="https://..." required style="font-size:.78rem;padding:.4rem .6rem" oninput="livePreview(' + variantCount + ', this.value)">'
-    + (hint ? '<div style="font-size:.72rem;color:#aaa;margin-top:.25rem">' + hint + '</div>' : '')
-    + '</div>';
-  grid.appendChild(card);
-  updateCountLabel();
-}}
-
-function livePreview(n, url) {{
-  var prev = document.getElementById('preview_' + n);
-  if (!prev) return;
-  prev.innerHTML = (url && url.startsWith('http'))
-    ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'&#128247;\'">'
-    : '&#128247;';
-}}
-
-function removeVariant(btn) {{
-  var card = btn.closest('[data-num]');
-  if (card) {{ card.remove(); updateCountLabel(); }}
-}}
-
-function updateCountLabel() {{
-  var n = document.getElementById('variants_grid').children.length;
-  variantCount = n;
-  document.getElementById('variant_count_label').textContent = 'Добавлено: ' + n + ' из ' + MAX_VARIANTS;
-  var b = document.getElementById('add_variant_btn');
-  if (b) b.style.opacity = n >= MAX_VARIANTS ? '.4' : '1';
-}}
-
-// Модальное окно
-function openPhotoModal() {{
-  if (variantCount >= MAX_VARIANTS) return;
-  document.getElementById('photo_modal').style.display = 'flex';
-  document.getElementById('url_input').value = '';
-  document.getElementById('url_preview').innerHTML = '&#128247;';
-  initUrlInput();
-  currentFileDataUrl = null;
-  document.getElementById('disk_preview').style.display = 'none';
-  document.getElementById('confirm_disk_btn').style.display = 'none';
-  switchTab('url');
-}}
-
-function closePhotoModal() {{
-  document.getElementById('photo_modal').style.display = 'none';
-}}
-
-function switchTab(tab) {{
-  ['url','disk','saved'].forEach(function(t) {{
-    document.getElementById('panel_' + t).style.display = t === tab ? 'block' : 'none';
-    var btn = document.getElementById('tab_' + t);
-    btn.style.color = t === tab ? '#667eea' : '#888';
-    btn.style.borderBottomColor = t === tab ? '#667eea' : 'transparent';
-    btn.style.fontWeight = t === tab ? '600' : '400';
-  }});
-}}
-
-// Вкладка URL
-function initUrlInput() {{
-  var urlInp = document.getElementById('url_input');
-  if (!urlInp || urlInp._inited) return;
-  urlInp._inited = true;
-  urlInp.addEventListener('input', function() {{
-    var prev = document.getElementById('url_preview');
-    prev.innerHTML = (this.value && this.value.startsWith('http'))
-      ? '<img src="' + this.value + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='&#128247;'">'
-      : '&#128247;';
-  }});
-}}
-}});
-
-function confirmUrl() {{
-  var url = document.getElementById('url_input').value.trim();
-  if (!url) return alert('Введите URL фото');
-  addVariantWithUrl(url, '', false);
-  closePhotoModal();
-}}
-
-// Вкладка диск
-function handleFile(file) {{
-  if (!file) return;
-  var reader = new FileReader();
-  reader.onload = function(e) {{
-    currentFileDataUrl = e.target.result;
-    document.getElementById('disk_img').src = currentFileDataUrl;
-    document.getElementById('disk_preview').style.display = 'block';
-    document.getElementById('confirm_disk_btn').style.display = 'block';
-  }};
-  reader.readAsDataURL(file);
-}}
-
-function handleDrop(e) {{
-  e.preventDefault();
-  document.getElementById('drop_zone').style.borderColor = '#d0d0d0';
-  var file = e.dataTransfer.files[0];
-  if (file && file.type.startsWith('image/')) handleFile(file);
-}}
-
-function confirmDisk() {{
-  if (!currentFileDataUrl) return;
-  // Сохраняем в saved
-  savedPhotos.push(currentFileDataUrl);
-  addVariantWithUrl(currentFileDataUrl, '', false);
-  updateSavedGrid();
-  closePhotoModal();
-}}
-
-// Вкладка сохранённые
-function updateSavedGrid() {{
-  var grid = document.getElementById('saved_grid');
-  if (!savedPhotos.length) {{
-    grid.innerHTML = '<div style="color:#888;font-size:.85rem;padding:1rem;grid-column:1/-1;text-align:center">Нет загруженных фото</div>';
-    return;
-  }}
-  grid.innerHTML = savedPhotos.map(function(src, i) {{
-    return '<div onclick="selectSaved(' + i + ')" style="cursor:pointer;border-radius:8px;overflow:hidden;height:90px;background:#f0f2f5">'
-      + '<img src="' + src + '" style="width:100%;height:100%;object-fit:cover"></div>';
-  }}).join('');
-}}
-
-function selectSaved(i) {{
-  addVariantWithUrl(savedPhotos[i], '', false);
-  closePhotoModal();
-}}
-
-// Закрытие по клику вне модала
-document.addEventListener('click', function(e) {{
-  var modal = document.getElementById('photo_modal');
-  if (e.target === modal) closePhotoModal();
-}});
-</script>
 <script src="/static/product-search.js"></script>
 """
     return render(html, 'tests')
