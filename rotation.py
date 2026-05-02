@@ -173,20 +173,21 @@ def get_product_info(key, offer_id):
     return None
 
 
-def set_main_photo(key, offer_id, product_id, photo_url, all_images):
+def set_main_photo(key, offer_id, product_id, photo_url, rest_images):
     """
     Меняет главное фото товара через /v1/product/pictures/import.
-    Озон принимает список URL — первый становится главным фото.
+    photo_url — новое главное фото (первое).
+    rest_images — остальные фото в нужном порядке (оригиналы Озона → варианты).
     """
-    # Строим список: новое фото первым, остальные за ним (без дублей)
-    images = [photo_url]
-    for img in all_images:
-        if isinstance(img, str) and img.startswith('http') and img != photo_url:
-            images.append(img)
+    # Первое фото = тестовый вариант, остальные — в переданном порядке
+    images = [photo_url] + [
+        img for img in rest_images
+        if isinstance(img, str) and img.startswith('http') and img != photo_url
+    ]
 
     payload = {
-        'product_id': product_id,
-        'images':     images[:10],   # Озон принимает до 10 фото через этот метод
+        'product_id':  product_id,
+        'images':      images[:15],  # Озон принимает до 15 фото
         'color_image': ''
     }
     try:
@@ -410,21 +411,35 @@ def _apply_photo(test, key, variant, all_variants):
         log.warning(f'  Не удалось получить product_id для {test["sku"]}')
         return False
 
-    # Собираем все публичные фото вариантов
-    existing = []
-    for v in all_variants:
-        url = v.get('photo_url', '')
-        if url.startswith('http') and url not in existing:
-            existing.append(url)
-
-    # Добавляем текущие фото с Озона
+    # Оригинальные фото товара с Озона (сохраняем их порядок)
+    ozon_images = []
     imgs = product.get('images', [])
     if isinstance(imgs, list):
         for img in imgs:
-            if isinstance(img, str) and img.startswith('http') and img not in existing:
-                existing.append(img)
+            if isinstance(img, str) and img.startswith('http'):
+                ozon_images.append(img)
 
-    return set_main_photo(key, test['sku'], product_id, photo_url, existing)
+    # URL всех тестовых вариантов (для добавления в конец)
+    variant_urls = []
+    for v in all_variants:
+        url = v.get('photo_url', '')
+        if url.startswith('http') and url not in variant_urls:
+            variant_urls.append(url)
+
+    # Строим итоговый список:
+    # 1. Тестовое фото — главное (первое место)
+    # 2. Оригинальные фото Озона — в своём порядке (продающая последовательность)
+    # 3. Остальные тестовые варианты — в конце (не мешают)
+    final_images = [photo_url]
+    for img in ozon_images:
+        if img != photo_url and img not in final_images:
+            final_images.append(img)
+    for url in variant_urls:
+        if url != photo_url and url not in final_images:
+            final_images.append(url)
+
+    log.info(f'  Порядок фото: тест[1] + озон[{len(ozon_images)}] + варианты[{len(variant_urls)}]')
+    return set_main_photo(key, test['sku'], product_id, photo_url, final_images[1:])
 
 
 # ── Точка входа ───────────────────────────────────────────────────────────────
