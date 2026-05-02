@@ -108,81 +108,116 @@ function updateCountLabel() {
   // не сбрасываем предупреждение здесь
 }
 
+// ── Прогресс-бар загрузки ─────────────────────────────────────────────────
+function setProgress(done, total, errors) {
+  var notice = document.getElementById('files_notice');
+  if (!notice) return;
+  if (total === 0) { notice.innerHTML = ''; return; }
+  var pct = Math.round((done / total) * 100);
+  var color = errors > 0 ? '#e74c3c' : '#667eea';
+  var statusText = done < total
+    ? 'Загружаем ' + done + ' из ' + total + '...'
+    : (errors > 0
+        ? '&#9888; ' + errors + ' фото не загрузились'
+        : '&#10003; Все фото загружены');
+  var statusColor = done < total ? '#555' : (errors > 0 ? '#e74c3c' : '#27ae60');
+  notice.innerHTML =
+    '<div style="width:100%">'
+    + '<div style="display:flex;justify-content:space-between;margin-bottom:.3rem;font-size:.85rem;font-weight:600">'
+    + '<span style="color:' + statusColor + '">' + statusText + '</span>'
+    + '<span style="color:#888">' + pct + '%</span>'
+    + '</div>'
+    + '<div style="background:#e9ecef;border-radius:99px;height:6px;overflow:hidden">'
+    + '<div style="height:100%;border-radius:99px;background:' + color + ';width:' + pct + '%;transition:width .25s ease"></div>'
+    + '</div>'
+    + '</div>';
+}
+
+// ── Сжатие одного файла → Blob (Promise) ──────────────────────────────────
+function compressFile(file) {
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = function(e) {
+      var img = new Image();
+      img.onerror = reject;
+      img.onload = function() {
+        var MAX = 1600;
+        var w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          var ratio = Math.min(MAX / w, MAX / h);
+          w = Math.round(w * ratio);
+          h = Math.round(h * ratio);
+        }
+        var canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        canvas.toBlob(function(blob) {
+          resolve({ blob: blob, preview: e.target.result });
+        }, 'image/jpeg', 0.85);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// ── Параллельная загрузка всех фото сразу ─────────────────────────────────
 function handleFiles(files) {
   if (!files || !files.length) return;
   var notice = document.getElementById('files_notice');
   if (notice) notice.innerHTML = '';
+
   var available = MAX_VARIANTS - variantCount;
   if (available <= 0) {
-    if (notice) notice.innerHTML = '<span style="color:#e74c3c;font-size:.95rem;font-weight:600">&#9888; Достигнут лимит 10 вариантов</span>';
+    showToast('Достигнут лимит 10 вариантов', 'error');
     return;
   }
-  var toAdd = Math.min(files.length, available);
+  var toAdd   = Math.min(files.length, available);
   var skipped = files.length - toAdd;
-
-  if (skipped > 0 && notice) {
-    notice.innerHTML = '<span style="color:#e67e22;font-size:.95rem;font-weight:600">&#9888; Добавлено ' + toAdd + ' из ' + files.length + ' — лимит 10 вариантов</span>';
-  } else if (notice) {
-    notice.innerHTML = '<span style="color:#667eea;font-size:.95rem">&#8987; Загружаем фото...</span>';
+  if (skipped > 0) {
+    showToast('Добавлено ' + toAdd + ' из ' + files.length + ' — лимит 10 вариантов', 'warning');
   }
 
-  var done = 0;
-  var errors = 0;
+  var done = 0, errors = 0;
+  setProgress(0, toAdd, 0);
+
+  // Шаг 1: сразу добавляем все карточки с превью и запоминаем номера
+  var tasks = [];
   for (var i = 0; i < toAdd; i++) {
-    (function(file) {
-      var reader = new FileReader();
-      reader.onload = function(e) {
-        var previewUrl = e.target.result;
-        // Добавляем карточку с превью (base64 только для img, не для hidden input)
-        addVariantWithUrl(previewUrl, '', false);
-        var cardNum = variantCount; // номер только что добавленной карточки
-        // Сразу очищаем hidden input — там не должен быть base64
-        var hiddenInp = document.querySelector('input[name="photo_' + cardNum + '"]');
-        if (hiddenInp) hiddenInp.value = '';
-
-        // Сжимаем изображение перед отправкой (макс 1600px, качество 0.85)
-        var img = new Image();
-        img.onload = function() {
-          var MAX = 1600;
-          var w = img.width, h = img.height;
-          if (w > MAX || h > MAX) {
-            var ratio = Math.min(MAX/w, MAX/h);
-            w = Math.round(w * ratio);
-            h = Math.round(h * ratio);
-          }
-          var canvas = document.createElement('canvas');
-          canvas.width = w; canvas.height = h;
-          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-          canvas.toBlob(function(blob) {
-            var fd = new FormData();
-            fd.append('photo', blob, 'photo.jpg');
-            fetch('/api/upload-photo', {method: 'POST', body: fd})
-          .then(function(r){ return r.json(); })
-          .then(function(data){
-            done++;
-            if (data.url) {
-              // Заменяем base64 на реальный URL в hidden input
-              var inp = document.querySelector('input[name="photo_' + cardNum + '"]');
-              if (inp) inp.value = data.url;
-            } else { errors++; }
-            if (done + errors === toAdd && skipped === 0 && notice) {
-              notice.innerHTML = errors > 0
-                ? '<span style="color:#e74c3c;font-size:.95rem;font-weight:600">&#9888; Ошибка загрузки ' + errors + ' фото</span>'
-                : '';
-            }
-          })
-          .catch(function(){
-            done++; errors++;
-            if (done === toAdd && skipped === 0 && notice)
-              notice.innerHTML = '<span style="color:#e74c3c;font-size:.95rem;font-weight:600">&#9888; Ошибка загрузки файлов</span>';
-          });
-          }, 'image/jpeg', 0.85); // сжимаем в JPEG качество 85%
-        };
-        img.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
-    })(files[i]);
+    // Добавляем карточку-заглушку (превью появится после сжатия)
+    addVariantWithUrl('', '', false);
+    tasks.push({ cardNum: variantCount, file: files[i] });
   }
+
+  // Шаг 2: параллельно сжимаем + загружаем все файлы
+  tasks.forEach(function(task) {
+    compressFile(task.file)
+      .then(function(result) {
+        // Ставим превью в карточку
+        var prev = document.getElementById('preview_' + task.cardNum);
+        if (prev) prev.innerHTML = '<img src="' + result.preview + '" style="width:100%;height:100%;object-fit:cover">';
+
+        // Загружаем на сервер
+        var fd = new FormData();
+        fd.append('photo', result.blob, 'photo.jpg');
+        return fetch('/api/upload-photo', { method: 'POST', body: fd }).then(function(r) { return r.json(); });
+      })
+      .then(function(data) {
+        done++;
+        if (data.url) {
+          var inp = document.querySelector('input[name="photo_' + task.cardNum + '"]');
+          if (inp) inp.value = data.url;
+        } else {
+          errors++;
+        }
+        setProgress(done, toAdd, errors);
+      })
+      .catch(function() {
+        done++; errors++;
+        setProgress(done, toAdd, errors);
+      });
+  });
 }
 
 function handleDrop(e) {
