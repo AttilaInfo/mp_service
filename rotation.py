@@ -13,7 +13,7 @@ import os
 import sys
 import time
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import requests
 import psycopg2
@@ -93,7 +93,7 @@ def should_rotate(test, variant, strategy):
     Возвращает True / False.
     """
     s = strategy
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     if s['type'] == 'time':
         last = test.get('last_rotated_at')
@@ -225,11 +225,11 @@ def update_variant_stats(conn, test, variants, key):
     Запрашивает аналитику из Озона за всё время теста
     и обновляет views/clicks/sales/ctr в test_variants.
     """
-    created_at = test.get('created_at') or datetime.utcnow()
+    created_at = test.get('created_at') or datetime.now(timezone.utc).replace(tzinfo=None)
     if isinstance(created_at, str):
         created_at = datetime.fromisoformat(created_at)
     date_from = created_at.strftime('%Y-%m-%d')
-    date_to   = datetime.utcnow().strftime('%Y-%m-%d')
+    date_to   = datetime.now(timezone.utc).replace(tzinfo=None).strftime('%Y-%m-%d')
 
     stats = get_analytics(key, test['sku'], date_from, date_to)
     if not stats:
