@@ -424,13 +424,13 @@ function addVariantWithUrl(url, hint, isFirst) {
     ? '<button type="button" onclick="removeVariant(this)" style="background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;font-size:1.2rem;padding:0;line-height:1">&times;</button>'
     : '';
   var previewHtml = url
-    ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:contain;background:#f8f9fa" onerror="this.parentElement.innerHTML=\'&#128247;\'">'
+    ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'&#128247;\'">'
     : '<span style="font-size:2.5rem">&#128247;</span>';
   card.innerHTML =
     '<div style="background:' + headerBg + ';color:#fff;padding:.35rem .7rem;font-size:.82rem;font-weight:700;display:flex;justify-content:space-between;align-items:center">'
     + '<span>' + label + (isFirst ? ' — текущее' : '') + '</span>' + delBtn + '</div>'
     + '<div style="padding:.65rem">'
-    + '<div id="preview_' + variantCount + '" style="width:100%;height:150px;background:#f8f9fa;border-radius:6px;margin-bottom:.5rem;overflow:hidden;display:flex;align-items:center;justify-content:center">'
+    + '<div id="preview_' + variantCount + '" style="width:100%;aspect-ratio:4/5;background:#f8f9fa;border-radius:6px;margin-bottom:.5rem;overflow:hidden;display:flex;align-items:center;justify-content:center">'
     + previewHtml + '</div>'
     + '<input type="url" name="photo_' + variantCount + '" value="' + (url || '') + '" class="fi" placeholder="https://..." required style="display:none" oninput="livePreview(' + variantCount + ', this.value)">'
     + '</div>';
@@ -442,7 +442,7 @@ function livePreview(n, url) {
   var prev = document.getElementById('preview_' + n);
   if (!prev) return;
   prev.innerHTML = (url && url.startsWith('http'))
-    ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:contain;background:#f8f9fa" onerror="this.parentElement.innerHTML=\'<span style=font-size:2.5rem>&#128247;</span>\'">'
+    ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'<span style=font-size:2.5rem>&#128247;</span>\'">'
     : '<span style="font-size:2.5rem">&#128247;</span>';
 }
 
@@ -484,7 +484,7 @@ function openPhotoModal() {
       var prev = document.getElementById('url_preview');
       if (!prev) return;
       prev.innerHTML = (this.value && this.value.startsWith('http'))
-        ? '<img src="' + this.value + '" style="width:100%;height:100%;object-fit:contain;background:#f8f9fa" onerror="this.parentElement.innerHTML=\'&#128247;\'">'
+        ? '<img src="' + this.value + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'&#128247;\'">'
         : '&#128247;';
     });
   }
@@ -962,7 +962,7 @@ def new_test():
   <!-- Варианты фото -->
   <div class="fg">
     <label>Варианты фото <span style="color:#667eea;font-size:.85rem">(от 2 до 10)</span></label>
-    <div id="variants_grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:1rem;margin-top:.5rem"></div>
+    <div id="variants_grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.75rem;margin-top:.5rem"></div>
     <div style="display:flex;gap:.75rem;align-items:center;margin-top:.75rem">
       <button type="button" onclick="openPhotoModal()" id="add_variant_btn"
         style="background:#f0f2f5;border:2px dashed #d0d0d0;border-radius:10px;padding:.6rem 1.2rem;cursor:pointer;color:#667eea;font-size:.9rem;font-weight:600">
