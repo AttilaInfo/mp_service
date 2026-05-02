@@ -69,7 +69,7 @@ function addVariantWithUrl(url, hint, isFirst) {
     + '<span>' + label + (isFirst ? ' — текущее' : '') + '</span>' + delBtn + '</div>'
     + '<div id="preview_' + variantCount + '" style="width:100%;aspect-ratio:3/4;background:#f0f2f5;overflow:hidden;display:flex;align-items:center;justify-content:center">'
     + previewHtml + '</div>'
-    + '<input type="url" name="photo_' + variantCount + '" value="' + (url || '') + '" class="fi" placeholder="https://..." style="display:none">';
+    + '<input type="hidden" name="photo_' + variantCount + '" value="' + (url || '') + '">';
   grid.appendChild(card);
   updateCountLabel();
 }
@@ -96,7 +96,7 @@ function updateCountLabel() {
       header.style.background = isFirst ? '#27ae60' : '#667eea';
       header.innerHTML = '<span>' + num + (isFirst ? ' — текущее' : '') + '</span>' + delBtn;
     }
-    var inp = card.querySelector('input[type="url"]');
+    var inp = card.querySelector('input[type="hidden"][name^="photo_"]');
     if (inp) inp.name = 'photo_' + num;
   }
 
