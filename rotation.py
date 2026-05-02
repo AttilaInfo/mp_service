@@ -71,7 +71,7 @@ def parse_strategy(strategy_str):
     if strategy_str.startswith('time:'):
         val = strategy_str[5:].rstrip('m')
         try:
-            return {'type': 'time', 'minutes': max(15, int(val))}
+            return {'type': 'time', 'minutes': max(5, int(val))}
         except ValueError:
             return {'type': 'time', 'minutes': 30}
     if strategy_str.startswith('views:'):
