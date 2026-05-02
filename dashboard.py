@@ -842,25 +842,27 @@ var MAX_VARIANTS = 10;
 var savedPhotos = [];
 var currentFileDataUrl = null;
 
-// При выборе товара — автоматически добавляем Вариант А с текущим фото
-var origSelectProduct = null;
-document.addEventListener('DOMContentLoaded', function() {{
-  origSelectProduct = window.selectProduct;
+// Перехватываем selectProduct после загрузки product-search.js
+function patchSelectProduct() {{
+  if (typeof window.selectProduct !== 'function') {{
+    setTimeout(patchSelectProduct, 100);
+    return;
+  }}
+  var orig = window.selectProduct;
   window.selectProduct = function(sku, name, img) {{
-    if (origSelectProduct) origSelectProduct(sku, name, img);
+    orig(sku, name, img);
     document.getElementById('product_img').value = img || '';
-    // Если вариант А ещё не добавлен — добавляем
     if (variantCount === 0) {{
-      addVariantWithUrl(img || '', 'Вариант А (текущее фото)', true);
+      addVariantWithUrl(img || '', 'текущее фото', true);
     }} else {{
-      // Обновляем превью первого варианта
       var prev = document.getElementById('preview_1');
       if (prev && img) prev.innerHTML = '<img src="' + img + '" style="width:100%;height:100%;object-fit:cover">';
       var inp = document.querySelector('input[name="photo_1"]');
       if (inp) inp.value = img || '';
     }}
   }};
-}});
+}}
+patchSelectProduct();
 
 function addVariantWithUrl(url, hint, isFirst) {{
   if (variantCount >= MAX_VARIANTS) return;
@@ -914,6 +916,7 @@ function openPhotoModal() {{
   document.getElementById('photo_modal').style.display = 'flex';
   document.getElementById('url_input').value = '';
   document.getElementById('url_preview').innerHTML = '&#128247;';
+  initUrlInput();
   currentFileDataUrl = null;
   document.getElementById('disk_preview').style.display = 'none';
   document.getElementById('confirm_disk_btn').style.display = 'none';
@@ -935,17 +938,17 @@ function switchTab(tab) {{
 }}
 
 // Вкладка URL
-document.addEventListener('DOMContentLoaded', function() {{
+function initUrlInput() {{
   var urlInp = document.getElementById('url_input');
-  if (urlInp) urlInp.addEventListener('input', function() {{
-    var v = this.value;
+  if (!urlInp || urlInp._inited) return;
+  urlInp._inited = true;
+  urlInp.addEventListener('input', function() {{
     var prev = document.getElementById('url_preview');
-    if (v && v.startsWith('http')) {{
-      prev.innerHTML = '<img src="' + v + '" style="width:100%;height:100%;object-fit:cover" onerror="this.innerHTML=\'&#128247;\'">';
-    }} else {{
-      prev.innerHTML = '&#128247;';
-    }}
+    prev.innerHTML = (this.value && this.value.startsWith('http'))
+      ? '<img src="' + this.value + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='&#128247;'">'
+      : '&#128247;';
   }});
+}}
 }});
 
 function confirmUrl() {{
