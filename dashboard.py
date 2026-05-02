@@ -709,108 +709,110 @@ def new_test():
         return redirect('/tests')
 
     err = request.args.get('err', '')
-
-    # Список магазинов
     shops_opts = ''.join(
         f'<option value="{k["id"]}">{k["shop_name"]} (ID: {k["client_id"]})</option>'
         for k in active_keys
     )
+    err_html = f'<div class="al er">{err}</div>' if err else ''
 
-    c = (
-        '<div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem">'
-        '<a href="/tests" class="btn" style="background:#f0f2f5;border:1px solid #ddd;color:#444">&#8592; Назад</a>'
-        '<p class="ttl" style="margin:0">&#43; Новый A/B тест</p>'
-        '</div>'
-        + (alert(err, 'er') if err else '') +
-        '<div class="box">'
-        '<form method="POST" action="/tests/create">'
-
-        # Магазин
-        '<div class="fg"><label>Магазин</label>'
-        f'<select name="key_id" class="fi" required>{shops_opts}</select></div>'
-
-        # Товар — поиск с картинками (JS загружает асинхронно)
-        '<div class="fg" style="position:relative"><label>'
-        'Товар <span style="color:#27ae60;font-size:.85rem">(с остатками)</span>'
-        '</label>'
-        '<input type="hidden" name="product" id="product_val">'
-        '<div style="position:relative">'
-        '<input type="text" id="prod_search" class="fi" autocomplete="off" '
-        'placeholder="Выберите карточку..." style="padding-right:2rem">'
-        '<button type="button" id="prod_clear" onclick="clearSearch()" '
-        'style="display:none;position:absolute;right:.5rem;top:50%;transform:translateY(-50%);'
-        'background:none;border:none;color:#aaa;cursor:pointer;font-size:1.2rem;padding:0;line-height:1">&times;</button>'
-        '</div>'
-        '<div style="margin-top:.4rem">'
-        '<span onclick="toggleSkuSearch()" '
-        'style="font-size:.82rem;color:#667eea;cursor:pointer;text-decoration:underline">'
-        'Не нашли товар? Найти по артикулу</span>'
-        '</div>'
-        '<div id="sku_search_wrap" style="display:none;margin-top:.5rem;display:none">'
-        '<div style="display:flex;gap:.5rem">'
-        '<input type="text" id="sku_manual" class="fi" placeholder="Введите артикул продавца или SKU Озона">'
-        '<button type="button" onclick="checkBySku()" '
-        'style="background:#667eea;color:#fff;border:none;border-radius:8px;'
-        'padding:.75rem 1.2rem;cursor:pointer;font-size:.9rem;font-weight:600;white-space:nowrap">'
-        'Найти</button>'
-        '</div></div>'
-        '<div id="prod_dropdown" style="display:none;position:absolute;z-index:200;'
-        'background:#fff;border:1px solid #ddd;border-radius:10px;'
-        'box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:350px;overflow-y:auto;'
-        'left:0;right:0;margin-top:4px"></div>'
-        '<div id="prod_selected" style="display:none;background:#f0fdf4;'
-        'border:2px solid #86efac;border-radius:10px;padding:.85rem 1rem;margin-top:.6rem;'
-        'align-items:center;gap:.85rem"></div>'
-        '<div id="prod_loading" style="display:none;color:#888;font-size:.85rem;margin-top:.4rem">'
-        '&#128269; Загружаем список товаров...</div>'
-        '<div id="sku_result" style="font-size:.85rem;margin-top:.4rem"></div>'
-        '<div class="hn" id="prod_hint_text">'
-        'Нажмите на поле — появится список товаров с остатками</div>'
-        '</div>'
-
-        # Количество вариантов
-        '<div class="fg"><label>Количество вариантов фото '
-        '<span style="color:#667eea">(от 2 до 10)</span></label>'
-        '<select name="variant_count" class="fi" id="vc_select">'
-        + ''.join(f'<option value="{i}">{i} варианта</option>' if i <= 4 else f'<option value="{i}">{i} вариантов</option>' for i in range(2, 11))
-        + '</select></div>'
-
-        '<div id="variants_wrap"></div>'
-
-        # Стратегия
-        '<div class="fg"><label>Стратегия ротации</label>'
-        '<select name="strategy" class="fi">'
-        '<option value="round_robin">По очереди (Round Robin) — равномерно</option>'
-        '<option value="random">Случайная</option>'
-        '<option value="best_ctr">Лучший CTR — больше показов победителю</option>'
-        '</select>'
-        '<div class="hn">Round Robin рекомендуется для новых тестов</div></div>'
-
-        '<button class="btn bp" style="width:100%">&#129514; Запустить тест</button>'
-        '</form></div>'
-
-        # JS для вариантов фото
-        '<script>'
-        'function updateVariants() {'
-        '  var n = parseInt(document.getElementById("vc_select").value);'
-        '  var wrap = document.getElementById("variants_wrap");'
-        '  var html = "";'
-        '  for (var i = 1; i <= n; i++) {'
-        '    html += "<div class=\"fg\"><label>Вариант " + String.fromCharCode(64+i) + " — URL фото</label>"'
-        '         + "<input type=\"url\" name=\"photo_" + i + "\" class=\"fi\"'
-        '           placeholder=\"https://...\" required>"'
-        '         + "<div class=\"hn\">Ссылка на фото (JPEG/PNG)</div></div>";'
-        '  }'
-        '  wrap.innerHTML = html;'
-        '}'
-        'document.getElementById("vc_select").addEventListener("change", updateVariants);'
-        'updateVariants();'
-        '</script>'
-
-        # Подключаем внешний JS для поиска товаров
-        '<script src="/static/product-search.js"></script>'
-    )
-    return render(c, 'tests')
+    html = f"""
+<div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem">
+  <a href="/tests" class="btn" style="background:#f0f2f5;border:1px solid #ddd;color:#444">&#8592; Назад</a>
+  <p class="ttl" style="margin:0">+ Новый A/B тест</p>
+</div>
+{err_html}
+<div class="box">
+<form method="POST" action="/tests/create">
+  <div class="fg"><label>Магазин</label>
+    <select name="key_id" class="fi" required>{shops_opts}</select>
+  </div>
+  <div class="fg" style="position:relative">
+    <label>Товар <span style="color:#27ae60;font-size:.85rem">(с остатками)</span></label>
+    <input type="hidden" name="product" id="product_val">
+    <div style="position:relative">
+      <input type="text" id="prod_search" class="fi" autocomplete="off" placeholder="Выберите карточку..." style="padding-right:2rem">
+      <button type="button" id="prod_clear" onclick="clearSearch()" style="display:none;position:absolute;right:.5rem;top:50%;transform:translateY(-50%);background:none;border:none;color:#aaa;cursor:pointer;font-size:1.2rem;padding:0;line-height:1">&times;</button>
+    </div>
+    <div id="prod_dropdown" style="display:none;position:absolute;z-index:200;background:#fff;border:1px solid #ddd;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:350px;overflow-y:auto;left:0;right:0;margin-top:2px"></div>
+    <div id="prod_selected" style="display:none;background:#f0fdf4;border:2px solid #86efac;border-radius:10px;padding:.85rem 1rem;margin-top:.6rem;align-items:center;gap:.85rem"></div>
+    <div id="prod_loading" style="display:none;color:#888;font-size:.85rem;margin-top:.4rem">&#128269; Загружаем список товаров...</div>
+    <div id="sku_result" style="font-size:.85rem;margin-top:.4rem"></div>
+    <div style="margin-top:.3rem">
+      <span onclick="toggleSkuSearch()" style="font-size:.82rem;color:#667eea;cursor:pointer;text-decoration:underline">Не нашли товар? Найти по артикулу</span>
+    </div>
+    <div id="sku_search_wrap" style="display:none;margin-top:.5rem">
+      <div style="display:flex;gap:.5rem">
+        <input type="text" id="sku_manual" class="fi" placeholder="Введите артикул продавца или SKU Озона">
+        <button type="button" onclick="checkBySku()" style="background:#667eea;color:#fff;border:none;border-radius:8px;padding:.75rem 1.2rem;cursor:pointer;font-size:.9rem;font-weight:600;white-space:nowrap">Найти</button>
+      </div>
+    </div>
+    <div class="hn" id="prod_hint_text">Нажмите на поле — появится список товаров с остатками</div>
+  </div>
+  <div class="fg">
+    <label>Варианты фото <span style="color:#667eea;font-size:.85rem">(от 2 до 10)</span></label>
+    <div id="variants_grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:1rem;margin-top:.5rem"></div>
+    <div style="display:flex;gap:.75rem;align-items:center;margin-top:.75rem">
+      <button type="button" onclick="addVariant()" id="add_variant_btn" style="background:#f0f2f5;border:2px dashed #d0d0d0;border-radius:10px;padding:.6rem 1.2rem;cursor:pointer;color:#667eea;font-size:.9rem;font-weight:600">+ Добавить вариант</button>
+      <span id="variant_count_label" style="font-size:.82rem;color:#888">Добавлено: 0 из 10</span>
+    </div>
+  </div>
+  <div class="fg"><label>Стратегия ротации</label>
+    <select name="strategy" class="fi">
+      <option value="round_robin">По очереди (Round Robin) — равномерно</option>
+      <option value="random">Случайная</option>
+      <option value="best_ctr">Лучший CTR — больше показов победителю</option>
+    </select>
+    <div class="hn">Round Robin рекомендуется для новых тестов</div>
+  </div>
+  <button class="btn bp" style="width:100%">&#129514; Запустить тест</button>
+</form>
+</div>
+<script>
+var variantCount = 0, MAX_VARIANTS = 10, MIN_VARIANTS = 2;
+function addVariant() {{
+  if (variantCount >= MAX_VARIANTS) return;
+  variantCount++;
+  var label = String.fromCharCode(64 + variantCount);
+  var grid = document.getElementById('variants_grid');
+  var card = document.createElement('div');
+  card.id = 'variant_card_' + variantCount;
+  card.setAttribute('data-num', variantCount);
+  card.style.cssText = 'border:2px solid #e0e0e0;border-radius:10px;overflow:hidden;position:relative;background:#fff';
+  var delBtn = variantCount > MIN_VARIANTS ? '<button type="button" onclick="removeVariant(this)" style="background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;font-size:1.1rem;padding:0;line-height:1">&times;</button>' : '';
+  card.innerHTML =
+    '<div style="background:#667eea;color:#fff;padding:.35rem .7rem;font-size:.82rem;font-weight:700;display:flex;justify-content:space-between;align-items:center">'
+    + '<span>Вариант ' + label + '</span>' + delBtn + '</div>'
+    + '<div style="padding:.65rem">'
+    + '<div id="preview_' + variantCount + '" style="width:100%;height:130px;background:#f0f2f5;border-radius:6px;margin-bottom:.5rem;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#ccc;font-size:2.5rem">&#128247;</div>'
+    + '<input type="url" name="photo_' + variantCount + '" class="fi" placeholder="https://..." required style="font-size:.78rem;padding:.4rem .6rem" oninput="updatePreview(' + variantCount + ', this.value)">'
+    + '<div style="font-size:.72rem;color:#aaa;margin-top:.25rem">Вставьте URL фото</div>'
+    + '</div>';
+  grid.appendChild(card);
+  updateCountLabel();
+}}
+function updatePreview(n, url) {{
+  var prev = document.getElementById('preview_' + n);
+  if (!prev) return;
+  prev.innerHTML = (url && url.startsWith('http'))
+    ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'&#128247;\'">'
+    : '&#128247;';
+}}
+function removeVariant(btn) {{
+  var card = btn.closest('[data-num]');
+  if (card) {{ card.remove(); updateCountLabel(); }}
+}}
+function updateCountLabel() {{
+  var n = document.getElementById('variants_grid').children.length;
+  variantCount = n;
+  document.getElementById('variant_count_label').textContent = 'Добавлено: ' + n + ' из ' + MAX_VARIANTS;
+  var b = document.getElementById('add_variant_btn');
+  if (b) b.style.opacity = n >= MAX_VARIANTS ? '.4' : '1';
+}}
+addVariant(); addVariant();
+</script>
+<script src="/static/product-search.js"></script>
+"""
+    return render(html, 'tests')
 
 
 @dashboard_bp.route('/tests/create', methods=['POST'])
