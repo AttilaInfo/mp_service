@@ -450,10 +450,28 @@ function removeVariant(btn) {
 }
 
 function updateCountLabel() {
-  var n = document.getElementById('variants_grid').children.length;
+  var grid = document.getElementById('variants_grid');
+  var cards = grid.children;
+  var n = cards.length;
   variantCount = n;
+
+  for (var i = 0; i < cards.length; i++) {
+    var card = cards[i];
+    var isFirst = (i === 0);
+    var num = i + 1;
+    card.setAttribute('data-num', num);
+    var header = card.querySelector('div[style*="background:"]');
+    if (header) {
+      var delBtn = isFirst ? '' : '<button type="button" onclick="removeVariant(this)" style="background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;font-size:1.2rem;padding:0;line-height:1">\u00d7</button>';
+      header.style.background = isFirst ? '#27ae60' : '#667eea';
+      header.innerHTML = '<span>' + num + (isFirst ? ' \u2014 \u0442\u0435\u043a\u0443\u0449\u0435\u0435' : '') + '</span>' + delBtn;
+    }
+    var inp = card.querySelector('input[type="url"]');
+    if (inp) inp.name = 'photo_' + num;
+  }
+
   var lbl = document.getElementById('variant_count_label');
-  if (lbl) lbl.textContent = 'Добавлено: ' + n + ' из ' + MAX_VARIANTS;
+  if (lbl) lbl.textContent = '\u0414\u043e\u0431\u0430\u0432\u043b\u0435\u043d\u043e: ' + n + ' \u0438\u0437 ' + MAX_VARIANTS;
   var b = document.getElementById('add_variant_btn');
   if (b) b.style.opacity = n >= MAX_VARIANTS ? '.4' : '1';
 }
