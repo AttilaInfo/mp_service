@@ -930,6 +930,9 @@ def new_test():
   <!-- Стратегия -->
   <div class="fg">
     <label>Стратегия смены фото</label>
+    <div style="background:#fff8e1;border:1.5px solid #ffe082;border-radius:8px;padding:.6rem .9rem;margin-bottom:.8rem;font-size:.85rem;color:#5d4037">
+      &#128161; <strong>Важно:</strong> тест автоматически завершится, когда самый слабый вариант наберёт <strong>10 000 показов</strong> — это справедливо для любой стратегии.
+    </div>
 
     <!-- Вариант 1: по времени -->
     <div class="strategy-option" id="s_time" onclick="selectStrategy('time')"
@@ -989,7 +992,7 @@ def new_test():
         </div>
         <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
           <span style="font-size:.9rem;color:#555">или введите вручную:</span>
-          <input type="number" name="rotation_views" id="rotation_views" value="500" min="50" max="10000"
+          <input type="number" name="rotation_views" id="rotation_views" value="100" min="50" max="10000"
             class="fi" style="width:100px;padding:.4rem .6rem;font-size:.95rem"
             onclick="event.stopPropagation()" oninput="clearViewsPresets()">
           <span style="font-size:.9rem;color:#555">показов</span>
@@ -1004,13 +1007,26 @@ def new_test():
         <input type="radio" name="strategy" value="clicks" id="r_clicks" style="accent-color:#667eea">
         <label for="r_clicks" style="font-weight:600;cursor:pointer;font-size:.95rem">&#128717; По количеству кликов</label>
       </div>
-      <div style="font-size:.85rem;color:#666;margin-bottom:.7rem">Ротация происходит когда самый слабый вариант наберёт нужное число кликов в корзину</div>
-      <div id="s_clicks_fields" style="display:none;align-items:center;gap:.5rem;flex-wrap:wrap">
-        <span style="font-size:.9rem;color:#555">Кликов на вариант</span>
-        <input type="number" name="rotation_clicks" id="rotation_clicks" value="20" min="1" max="10000"
-          class="fi" style="width:100px;padding:.4rem .6rem;font-size:.95rem"
-          onclick="event.stopPropagation()">
-        <span style="font-size:.8rem;color:#aaa">(рекомендуем от 20)</span>
+      <div style="font-size:.85rem;color:#666;margin-bottom:.7rem">Ротация происходит при достижении карточкой нужного числа кликов в корзину</div>
+      <div id="s_clicks_fields" style="display:none;flex-direction:column;gap:.65rem">
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap" onclick="event.stopPropagation()">
+          <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer;background:#fff;border:1.5px solid #d0d0d0;border-radius:8px;padding:.35rem .75rem;font-size:.85rem;font-weight:500" id="cpreset_label_20">
+            <input type="checkbox" id="cpreset_20" onchange="applyClicksPreset(this,20)" style="accent-color:#667eea;cursor:pointer"> 20 кликов
+          </label>
+          <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer;background:#fff;border:1.5px solid #d0d0d0;border-radius:8px;padding:.35rem .75rem;font-size:.85rem;font-weight:500" id="cpreset_label_100">
+            <input type="checkbox" id="cpreset_100" onchange="applyClicksPreset(this,100)" style="accent-color:#667eea;cursor:pointer"> 100 кликов
+          </label>
+          <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer;background:#fff;border:1.5px solid #d0d0d0;border-radius:8px;padding:.35rem .75rem;font-size:.85rem;font-weight:500" id="cpreset_label_200">
+            <input type="checkbox" id="cpreset_200" onchange="applyClicksPreset(this,200)" style="accent-color:#667eea;cursor:pointer"> 200 кликов
+          </label>
+        </div>
+        <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+          <span style="font-size:.9rem;color:#555">или введите вручную:</span>
+          <input type="number" name="rotation_clicks" id="rotation_clicks" value="20" min="1" max="10000"
+            class="fi" style="width:100px;padding:.4rem .6rem;font-size:.95rem"
+            onclick="event.stopPropagation()" oninput="clearClicksPresets()">
+          <span style="font-size:.9rem;color:#555">кликов</span>
+        </div>
       </div>
     </div>
   </div>
@@ -1039,7 +1055,27 @@ def new_test():
       if (lbl) lbl.style.borderColor = (v === val && cb.checked) ? '#667eea' : '#d0d0d0';
     }});
     var inp = document.getElementById('rotation_views');
-    if (inp) inp.value = cb.checked ? val : 500;
+    if (inp) inp.value = cb.checked ? val : 100;
+  }}
+
+  function applyClicksPreset(cb, val) {{
+    [20,100,200].forEach(function(v) {{
+      var el = document.getElementById('cpreset_' + v);
+      var lbl = document.getElementById('cpreset_label_' + v);
+      if (el && v !== val) el.checked = false;
+      if (lbl) lbl.style.borderColor = (v === val && cb.checked) ? '#667eea' : '#d0d0d0';
+    }});
+    var inp = document.getElementById('rotation_clicks');
+    if (inp) inp.value = cb.checked ? val : 20;
+  }}
+
+  function clearClicksPresets() {{
+    [20,100,200].forEach(function(v) {{
+      var el = document.getElementById('cpreset_' + v);
+      var lbl = document.getElementById('cpreset_label_' + v);
+      if (el) el.checked = false;
+      if (lbl) lbl.style.borderColor = '#d0d0d0';
+    }});
   }}
 
   function clearViewsPresets() {{
