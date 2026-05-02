@@ -1034,6 +1034,7 @@ def new_test():
 </div>
 
 
+<script src="/static/variants.js"></script>
 <script src="/static/product-search.js"></script>
 """
     return render(html, 'tests')
