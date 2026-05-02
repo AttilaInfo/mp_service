@@ -67,9 +67,13 @@ def init_db():
                     clicks      INTEGER DEFAULT 0,
                     sales       INTEGER DEFAULT 0,
                     ctr         FLOAT DEFAULT 0.0,
-                    conversion  FLOAT DEFAULT 0.0
+                    conversion  FLOAT DEFAULT 0.0,
+                    paused      BOOLEAN DEFAULT FALSE
                 )
             """)
+            # Добавляем колонки если их ещё нет (для существующих БД)
+            cur.execute("ALTER TABLE test_variants ADD COLUMN IF NOT EXISTS paused BOOLEAN DEFAULT FALSE")
+            cur.execute("ALTER TABLE tests ADD COLUMN IF NOT EXISTS strategy TEXT DEFAULT 'time:30m'")
 
         conn.commit()
     print('БД инициализирована успешно')
@@ -215,11 +219,52 @@ def finish_test(test_id, user_id):
         conn.commit()
 
 
+def toggle_variant_pause(variant_id, test_id, user_id):
+    """Переключает паузу варианта. Нельзя поставить на паузу если активных < 2."""
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # Проверяем что тест принадлежит пользователю и активен
+            cur.execute(
+                "SELECT id FROM tests WHERE id=%s AND user_id=%s AND status='running'",
+                (test_id, user_id)
+            )
+            if not cur.fetchone():
+                return False, 'Тест не найден или завершён'
+
+            # Получаем текущий статус варианта
+            cur.execute(
+                "SELECT paused FROM test_variants WHERE id=%s AND test_id=%s",
+                (variant_id, test_id)
+            )
+            row = cur.fetchone()
+            if not row:
+                return False, 'Вариант не найден'
+
+            currently_paused = row['paused']
+
+            # Если хотим поставить на паузу — проверяем что останется минимум 2 активных
+            if not currently_paused:
+                cur.execute(
+                    "SELECT COUNT(*) as cnt FROM test_variants WHERE test_id=%s AND paused=FALSE",
+                    (test_id,)
+                )
+                active_count = cur.fetchone()['cnt']
+                if active_count <= 2:
+                    return False, 'Нельзя — должно остаться минимум 2 активных варианта'
+
+            # Переключаем
+            cur.execute(
+                "UPDATE test_variants SET paused=%s WHERE id=%s AND test_id=%s",
+                (not currently_paused, variant_id, test_id)
+            )
+        conn.commit()
+    return True, 'paused' if not currently_paused else 'resumed'
+
+
 def delete_test(test_id, user_id):
     """Удаляет завершённый тест (каскадно удаляет варианты)."""
     with get_conn() as conn:
         with conn.cursor() as cur:
-            # Только завершённые тесты можно удалять
             cur.execute(
                 "DELETE FROM tests WHERE id=%s AND user_id=%s AND status='completed'",
                 (test_id, user_id)
