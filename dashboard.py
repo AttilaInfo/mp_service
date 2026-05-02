@@ -384,7 +384,6 @@ def variants_js():
     return Response(r"""
 var variantCount = 0;
 var MAX_VARIANTS = 10;
-var savedPhotos = [];
 var currentFiles = [];
 
 function patchSelectProduct() {
@@ -409,6 +408,12 @@ function patchSelectProduct() {
 }
 patchSelectProduct();
 
+function triggerFileInput() {
+  if (variantCount >= MAX_VARIANTS) return;
+  var fi = document.getElementById('file_inp');
+  if (fi) { fi.value = ''; fi.click(); }
+}
+
 function addVariantWithUrl(url, hint, isFirst) {
   if (variantCount >= MAX_VARIANTS) return;
   variantCount++;
@@ -424,24 +429,16 @@ function addVariantWithUrl(url, hint, isFirst) {
     ? '<button type="button" onclick="removeVariant(this)" style="background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;font-size:1.2rem;padding:0;line-height:1">&times;</button>'
     : '';
   var previewHtml = url
-    ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'&#128247;\'">'
+    ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='&#128247;'">'
     : '<span style="font-size:2.5rem">&#128247;</span>';
   card.innerHTML =
     '<div style="background:' + headerBg + ';color:#fff;padding:.35rem .7rem;font-size:.82rem;font-weight:700;display:flex;justify-content:space-between;align-items:center">'
     + '<span>' + label + (isFirst ? ' — текущее' : '') + '</span>' + delBtn + '</div>'
     + '<div id="preview_' + variantCount + '" style="width:100%;aspect-ratio:3/4;background:#f0f2f5;overflow:hidden;display:flex;align-items:center;justify-content:center">'
     + previewHtml + '</div>'
-    + '<input type="url" name="photo_' + variantCount + '" value="' + (url || '') + '" class="fi" placeholder="https://..." required style="display:none" oninput="livePreview(' + variantCount + ', this.value)">';
+    + '<input type="url" name="photo_' + variantCount + '" value="' + (url || '') + '" class="fi" placeholder="https://..." required style="display:none">';
   grid.appendChild(card);
   updateCountLabel();
-}
-
-function livePreview(n, url) {
-  var prev = document.getElementById('preview_' + n);
-  if (!prev) return;
-  prev.innerHTML = (url && url.startsWith('http'))
-    ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'<span style=font-size:2.5rem>&#128247;</span>\'">'
-    : '<span style="font-size:2.5rem">&#128247;</span>';
 }
 
 function removeVariant(btn) {
@@ -462,141 +459,49 @@ function updateCountLabel() {
     card.setAttribute('data-num', num);
     var header = card.querySelector('div[style*="background:"]');
     if (header) {
-      var delBtn = isFirst ? '' : '<button type="button" onclick="removeVariant(this)" style="background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;font-size:1.2rem;padding:0;line-height:1">\u00d7</button>';
+      var delBtn = isFirst ? '' : '<button type="button" onclick="removeVariant(this)" style="background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;font-size:1.2rem;padding:0;line-height:1">×</button>';
       header.style.background = isFirst ? '#27ae60' : '#667eea';
-      header.innerHTML = '<span>' + num + (isFirst ? ' \u2014 \u0442\u0435\u043a\u0443\u0449\u0435\u0435' : '') + '</span>' + delBtn;
+      header.innerHTML = '<span>' + num + (isFirst ? ' — текущее' : '') + '</span>' + delBtn;
     }
     var inp = card.querySelector('input[type="url"]');
     if (inp) inp.name = 'photo_' + num;
   }
 
   var lbl = document.getElementById('variant_count_label');
-  if (lbl) lbl.textContent = '\u0414\u043e\u0431\u0430\u0432\u043b\u0435\u043d\u043e: ' + n + ' \u0438\u0437 ' + MAX_VARIANTS;
+  if (lbl) lbl.textContent = 'Добавлено: ' + n + ' из ' + MAX_VARIANTS;
   var b = document.getElementById('add_variant_btn');
   if (b) b.style.opacity = n >= MAX_VARIANTS ? '.4' : '1';
-}
-
-// Модальное окно
-function openPhotoModal() {
-  if (variantCount >= MAX_VARIANTS) return;
-  var modal = document.getElementById('photo_modal');
-  if (!modal) return;
-  modal.style.display = 'flex';
-  currentFiles = [];
-  var urlInp = document.getElementById('url_input');
-  if (urlInp) { urlInp.value = ''; }
-  var urlPrev = document.getElementById('url_preview');
-  if (urlPrev) urlPrev.innerHTML = '&#128247;';
-  var dp = document.getElementById('disk_preview_wrap');
-  if (dp) dp.innerHTML = '';
-  var cb = document.getElementById('confirm_disk_btn');
-  if (cb) cb.style.display = 'none';
   var notice = document.getElementById('files_notice');
   if (notice) notice.textContent = '';
-  switchTab('disk');
-  if (urlInp && !urlInp._inited) {
-    urlInp._inited = true;
-    urlInp.addEventListener('input', function() {
-      var prev = document.getElementById('url_preview');
-      if (!prev) return;
-      prev.innerHTML = (this.value && this.value.startsWith('http'))
-        ? '<img src="' + this.value + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'&#128247;\'">'
-        : '&#128247;';
-    });
-  }
 }
 
-function closePhotoModal() {
-  var modal = document.getElementById('photo_modal');
-  if (modal) modal.style.display = 'none';
-}
-
-function switchTab(tab) {
-  ['disk','url'].forEach(function(t) {
-    var panel = document.getElementById('panel_' + t);
-    if (panel) panel.style.display = t === tab ? 'block' : 'none';
-    var btn = document.getElementById('tab_' + t);
-    if (btn) {
-      btn.style.color = t === tab ? '#667eea' : '#888';
-      btn.style.borderBottomColor = t === tab ? '#667eea' : 'transparent';
-      btn.style.fontWeight = t === tab ? '600' : '400';
-    }
-  });
-}
-
-function confirmUrl() {
-  var urlInp = document.getElementById('url_input');
-  var url = urlInp ? urlInp.value.trim() : '';
-  if (!url) { alert('Введите URL фото'); return; }
-  addVariantWithUrl(url, '', false);
-  closePhotoModal();
-}
-
-// Загрузка нескольких файлов
 function handleFiles(files) {
   if (!files || !files.length) return;
   var available = MAX_VARIANTS - variantCount;
+  if (available <= 0) return;
+  var toAdd = Math.min(files.length, available);
+  var skipped = files.length - toAdd;
   var notice = document.getElementById('files_notice');
-  var previewWrap = document.getElementById('disk_preview_wrap');
-  previewWrap.innerHTML = '';
-  currentFiles = [];
 
-  var total = files.length;
-  var toAdd = Math.min(total, available);
-
-  if (total > available) {
-    var skipped = total - toAdd;
-    notice.innerHTML =
-      '<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:.75rem 1rem;font-size:.85rem;color:#5d4037">'
-      + '&#128161; <strong>Для точных результатов рекомендуем до ' + MAX_VARIANTS + ' вариантов.</strong><br>'
-      + 'Мы добавим первые <strong>' + toAdd + '</strong> фото. '
-      + 'Чем меньше вариантов — тем быстрее тест наберёт статистику и покажет победителя.'
-      + '</div>';
-  } else {
-    notice.innerHTML = '';
+  if (skipped > 0 && notice) {
+    notice.innerHTML = '<span style="color:#e67e22">⚠️ Добавлено ' + toAdd + ' из ' + files.length + ' фото (лимит 10 вариантов)</span>';
   }
 
   for (var i = 0; i < toAdd; i++) {
-    (function(file, idx) {
+    (function(file) {
       var reader = new FileReader();
       reader.onload = function(e) {
-        currentFiles.push(e.target.result);
-        var thumb = document.createElement('div');
-        thumb.style.cssText = 'display:inline-block;width:80px;height:80px;margin:.3rem;border-radius:6px;overflow:hidden;border:2px solid #e0e0e0';
-        thumb.innerHTML = '<img src="' + e.target.result + '" style="width:100%;height:100%;object-fit:cover">';
-        previewWrap.appendChild(thumb);
-        if (currentFiles.length === toAdd) {
-          var cb = document.getElementById('confirm_disk_btn');
-          if (cb) {
-            cb.style.display = 'block';
-            cb.textContent = toAdd === 1 ? 'Добавить этот вариант' : 'Добавить ' + toAdd + ' варианта(-ов)';
-          }
-        }
+        addVariantWithUrl(e.target.result, '', false);
       };
       reader.readAsDataURL(file);
-    })(files[i], i);
+    })(files[i]);
   }
 }
 
 function handleDrop(e) {
   e.preventDefault();
-  var dz = document.getElementById('drop_zone');
-  if (dz) dz.style.borderColor = '#d0d0d0';
   handleFiles(e.dataTransfer.files);
 }
-
-function confirmDisk() {
-  if (!currentFiles.length) return;
-  currentFiles.forEach(function(dataUrl) {
-    addVariantWithUrl(dataUrl, '', false);
-  });
-  closePhotoModal();
-}
-
-document.addEventListener('click', function(e) {
-  var modal = document.getElementById('photo_modal');
-  if (e.target === modal) closePhotoModal();
-});
 
     """, mimetype='application/javascript')
 
@@ -983,12 +888,14 @@ def new_test():
       @media(max-width:600px){{ #variants_grid {{ grid-template-columns:repeat(2,1fr) !important }} }}
     </style>
     <div id="variants_grid"></div>
-    <div style="display:flex;gap:.75rem;align-items:center;margin-top:.75rem">
-      <button type="button" onclick="openPhotoModal()" id="add_variant_btn"
+    <div style="display:flex;gap:.75rem;align-items:center;margin-top:.75rem;flex-wrap:wrap">
+      <button type="button" onclick="triggerFileInput()" id="add_variant_btn"
         style="background:#f0f2f5;border:2px dashed #d0d0d0;border-radius:10px;padding:.6rem 1.2rem;cursor:pointer;color:#667eea;font-size:.9rem;font-weight:600">
-        + Добавить вариант
+        + Добавить фото
       </button>
+      <input type="file" id="file_inp" accept="image/*" multiple style="display:none" onchange="handleFiles(this.files)">
       <span id="variant_count_label" style="font-size:.82rem;color:#888">Добавлено: 1 из 10</span>
+      <span id="files_notice" style="font-size:.82rem"></span>
     </div>
   </div>
 
@@ -1003,53 +910,6 @@ def new_test():
   </div>
   <button class="btn bp" style="width:100%">&#129514; Запустить тест</button>
 </form>
-</div>
-
-<!-- Модальное окно загрузки фото -->
-<div id="photo_modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center">
-  <div style="background:#fff;border-radius:16px;padding:1.5rem;width:min(480px,95vw);max-height:90vh;overflow-y:auto">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.2rem">
-      <h3 style="margin:0;font-size:1.1rem">Добавить фото варианта</h3>
-      <button onclick="closePhotoModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#aaa">&times;</button>
-    </div>
-    <!-- Вкладки -->
-    <div style="display:flex;border-bottom:2px solid #f0f0f0;margin-bottom:1.2rem;gap:.5rem">
-      <button type="button" id="tab_disk" onclick="switchTab('disk')"
-        style="padding:.5rem 1rem;border:none;background:none;cursor:pointer;font-size:.9rem;font-weight:600;color:#667eea;border-bottom:2px solid #667eea;margin-bottom:-2px">
-        С диска
-      </button>
-      <button type="button" id="tab_url" onclick="switchTab('url')"
-        style="padding:.5rem 1rem;border:none;background:none;cursor:pointer;font-size:.9rem;color:#888;border-bottom:2px solid transparent;margin-bottom:-2px">
-        По ссылке
-      </button>
-    </div>
-
-    <!-- Вкладка: По ссылке -->
-    <div id="panel_url">
-      <label style="font-size:.85rem;color:#666;display:block;margin-bottom:.4rem">URL фото (JPEG, PNG, WebP)</label>
-      <input type="url" id="url_input" class="fi" placeholder="https://cdn1.ozone.ru/..." style="margin-bottom:.8rem">
-      <div id="url_preview" style="width:100%;height:160px;background:#f0f2f5;border-radius:8px;margin-bottom:1rem;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#ccc;font-size:3rem">&#128247;</div>
-      <button type="button" onclick="confirmUrl()" class="btn bp" style="width:100%">Добавить этот вариант</button>
-    </div>
-
-    <!-- Вкладка: С диска -->
-    <div id="panel_disk" style="display:none">
-      <div id="drop_zone" onclick="document.getElementById('file_inp').click()"
-        style="border:2px dashed #d0d0d0;border-radius:10px;padding:1.5rem;text-align:center;cursor:pointer;margin-bottom:.8rem;transition:border-color .2s"
-        ondragover="event.preventDefault();this.style.borderColor='#667eea'"
-        ondragleave="this.style.borderColor='#d0d0d0'"
-        ondrop="handleDrop(event)">
-        <div style="font-size:2.5rem;margin-bottom:.5rem">&#128444;</div>
-        <div style="font-weight:600;color:#444">Перетащите файлы или кликните</div>
-        <div style="font-size:.8rem;color:#aaa;margin-top:.3rem">JPG, PNG, WebP · можно несколько файлов сразу</div>
-      </div>
-      <input type="file" id="file_inp" accept="image/*" multiple style="display:none" onchange="handleFiles(this.files)">
-      <div id="files_notice" style="margin-bottom:.6rem"></div>
-      <div id="disk_preview_wrap" style="margin-bottom:.8rem;display:flex;flex-wrap:wrap;gap:.3rem"></div>
-      <button type="button" id="confirm_disk_btn" onclick="confirmDisk()" class="btn bp" style="width:100%;display:none">Добавить варианты</button>
-    </div>
-
-  </div>
 </div>
 
 
