@@ -472,19 +472,23 @@ function updateCountLabel() {
   var b = document.getElementById('add_variant_btn');
   if (b) b.style.opacity = n >= MAX_VARIANTS ? '.4' : '1';
   var notice = document.getElementById('files_notice');
-  if (notice) notice.textContent = '';
+  // не сбрасываем предупреждение здесь
 }
 
 function handleFiles(files) {
   if (!files || !files.length) return;
+  var notice = document.getElementById('files_notice');
+  if (notice) notice.innerHTML = '';
   var available = MAX_VARIANTS - variantCount;
-  if (available <= 0) return;
+  if (available <= 0) {
+    if (notice) notice.innerHTML = '<span style="color:#e74c3c">&#9888; Достигнут лимит 10 вариантов</span>';
+    return;
+  }
   var toAdd = Math.min(files.length, available);
   var skipped = files.length - toAdd;
-  var notice = document.getElementById('files_notice');
 
   if (skipped > 0 && notice) {
-    notice.innerHTML = '<span style="color:#e67e22">⚠️ Добавлено ' + toAdd + ' из ' + files.length + ' фото (лимит 10 вариантов)</span>';
+    notice.innerHTML = '<span style="color:#e67e22">&#9888; Добавлено ' + toAdd + ' из ' + files.length + ' — лимит 10 вариантов</span>';
   }
 
   for (var i = 0; i < toAdd; i++) {
