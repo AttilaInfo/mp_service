@@ -11,7 +11,6 @@ uploads.py — загрузка фото через Telegraph (telegra.ph).
 import os
 import re
 import uuid
-import requests as req
 
 from flask import Blueprint, request, jsonify, abort, make_response
 from flask import send_from_directory
@@ -52,57 +51,9 @@ def _safe_user_dir(user_id: int) -> str:
     return path
 
 
-def _upload_to_cdn(data: bytes, ext: str) -> str | None:
-    """
-    Пробует загрузить фото на несколько публичных CDN по очереди.
-    Возвращает первый успешный публичный URL или None.
-    """
-    mime_map = {'jpg': 'image/jpeg', 'png': 'image/png',
-                'webp': 'image/webp', 'gif': 'image/gif'}
-    mime = mime_map.get(ext, 'image/jpeg')
-
-    # 1. Telegraph
-    try:
-        r = req.post(
-            'https://telegra.ph/upload',
-            files={'file': (f'photo.{ext}', data, mime)},
-            timeout=15
-        )
-        if r.status_code == 200:
-            result = r.json()
-            if isinstance(result, list) and result:
-                path = result[0].get('src', '')
-                if path:
-                    return 'https://telegra.ph' + path
-    except Exception:
-        pass
-
-    # 2. catbox.moe — анонимный хостинг без регистрации
-    try:
-        r = req.post(
-            'https://catbox.moe/user/api.php',
-            data={'reqtype': 'fileupload'},
-            files={'fileToUpload': (f'photo.{ext}', data, mime)},
-            timeout=20
-        )
-        if r.status_code == 200 and r.text.startswith('https://'):
-            return r.text.strip()
-    except Exception:
-        pass
-
-    # 3. 0x0.st — минималистичный файловый хостинг
-    try:
-        r = req.post(
-            'https://0x0.st',
-            files={'file': (f'photo.{ext}', data, mime)},
-            timeout=20
-        )
-        if r.status_code == 200 and r.text.strip().startswith('https://'):
-            return r.text.strip()
-    except Exception:
-        pass
-
-    return None
+# Базовый URL сервиса — фото отдаются публично по HTTPS
+# Озон скачает фото по этому URL при ротации
+SERVICE_BASE_URL = os.environ.get('SERVICE_URL', 'https://mpservice-production.up.railway.app')
 
 
 # ── Загрузка ───────────────────────────────────────────────────────────────
@@ -141,22 +92,14 @@ def upload_photo():
         out.write(data)
 
     # 2. Загружаем на Telegraph (для Озона — нужен публичный URL)
-    public_url = _upload_to_cdn(data, ext)
+    # Формируем публичный URL — наш сайт доступен по HTTPS, Озон может скачать фото
+    local_path = f'/uploads/{u["id"]}/{filename}'
+    public_url = f'{SERVICE_BASE_URL}{local_path}' 
 
-    if public_url:
-        # Возвращаем публичный URL — Озон сможет его принять
-        return jsonify({
-            'url':        public_url,
-            'local_url':  f'/uploads/{u["id"]}/{filename}',
-        })
-    else:
-        # Telegraph недоступен — возвращаем локальный URL
-        # Ротация не будет работать пока нет публичного URL
-        return jsonify({
-            'url':       f'/uploads/{u["id"]}/{filename}',
-            'local_url': f'/uploads/{u["id"]}/{filename}',
-            'warning':   'Фото сохранено локально. Ротация через Озон недоступна.',
-        })
+    return jsonify({
+        'url':       public_url,
+        'local_url': local_path,
+    })
 
 
 # ── Отдача локальных файлов ────────────────────────────────────────────────
