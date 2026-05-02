@@ -213,3 +213,26 @@ def finish_test(test_id, user_id):
                 (test_id, user_id)
             )
         conn.commit()
+
+
+def delete_test(test_id, user_id):
+    """Удаляет завершённый тест (каскадно удаляет варианты)."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            # Только завершённые тесты можно удалять
+            cur.execute(
+                "DELETE FROM tests WHERE id=%s AND user_id=%s AND status='completed'",
+                (test_id, user_id)
+            )
+        conn.commit()
+
+
+def update_test_strategy(test_id, user_id, strategy):
+    """Обновляет стратегию активного теста."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE tests SET strategy=%s WHERE id=%s AND user_id=%s AND status='running'",
+                (strategy, test_id, user_id)
+            )
+        conn.commit()
