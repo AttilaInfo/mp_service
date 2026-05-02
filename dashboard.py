@@ -918,11 +918,11 @@ def new_test():
     <div id="variants_grid"></div>
     <div style="display:flex;gap:.75rem;align-items:center;margin-top:.75rem;flex-wrap:wrap">
       <button type="button" onclick="triggerFileInput()" id="add_variant_btn"
-        style="background:#f0f2f5;border:2px dashed #d0d0d0;border-radius:10px;padding:.6rem 1.2rem;cursor:pointer;color:#667eea;font-size:.9rem;font-weight:600">
+        style="background:#f0f2f5;border:2px dashed #d0d0d0;border-radius:10px;padding:.6rem 1.4rem;cursor:pointer;color:#667eea;font-size:1rem;font-weight:600">
         + Добавить фото
       </button>
       <input type="file" id="file_inp" accept="image/*" multiple style="display:none" onchange="handleFiles(this.files)">
-      <span id="variant_count_label" style="font-size:.82rem;color:#888">Добавлено: 1 из 10</span>
+      <span id="variant_count_label" style="font-size:.95rem;font-weight:600;color:#888">Добавлено: 1 из 10</span>
       <span id="files_notice" style="font-size:.95rem;font-weight:600"></span>
     </div>
   </div>
@@ -938,14 +938,31 @@ def new_test():
         <input type="radio" name="strategy" value="time" id="r_time" checked style="accent-color:#667eea">
         <label for="r_time" style="font-weight:600;cursor:pointer;font-size:.95rem">&#9201; По времени</label>
       </div>
-      <div style="font-size:.85rem;color:#666;margin-bottom:.7rem">Каждый вариант показывается заданное время, затем автоматически меняется</div>
-      <div id="s_time_fields" style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
-        <span style="font-size:.9rem;color:#555">Менять каждые</span>
-        <input type="number" name="rotation_minutes" id="rotation_minutes" value="30" min="1" max="10080"
-          class="fi" style="width:90px;padding:.4rem .6rem;font-size:.95rem"
-          onclick="event.stopPropagation()">
-        <span style="font-size:.9rem;color:#555">минут</span>
-        <span style="font-size:.8rem;color:#aaa">(мин: 1, макс: 10 080 = 1 неделя)</span>
+      <div style="font-size:.85rem;color:#666;margin-bottom:.7rem">Каждый вариант показывается заданное время, затем автоматически меняется на следующий</div>
+      <div id="s_time_fields" style="display:flex;flex-direction:column;gap:.65rem">
+        <!-- Быстрые пресеты -->
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap" onclick="event.stopPropagation()">
+          <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer;background:#fff;border:1.5px solid #d0d0d0;border-radius:8px;padding:.35rem .75rem;font-size:.85rem;font-weight:500;transition:border-color .15s" id="preset_label_1h">
+            <input type="checkbox" id="preset_1h" onchange="applyPreset(this,'1h')" style="accent-color:#667eea;cursor:pointer"> каждый час
+          </label>
+          <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer;background:#fff;border:1.5px solid #d0d0d0;border-radius:8px;padding:.35rem .75rem;font-size:.85rem;font-weight:500;transition:border-color .15s" id="preset_label_4h">
+            <input type="checkbox" id="preset_4h" onchange="applyPreset(this,'4h')" style="accent-color:#667eea;cursor:pointer"> каждые 4 часа
+          </label>
+          <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer;background:#fff;border:1.5px solid #d0d0d0;border-radius:8px;padding:.35rem .75rem;font-size:.85rem;font-weight:500;transition:border-color .15s" id="preset_label_1d">
+            <input type="checkbox" id="preset_1d" onchange="applyPreset(this,'1d')" style="accent-color:#667eea;cursor:pointer"> раз в день
+          </label>
+          <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer;background:#fff;border:1.5px solid #d0d0d0;border-radius:8px;padding:.35rem .75rem;font-size:.85rem;font-weight:500;transition:border-color .15s" id="preset_label_1w">
+            <input type="checkbox" id="preset_1w" onchange="applyPreset(this,'1w')" style="accent-color:#667eea;cursor:pointer"> раз в неделю
+          </label>
+        </div>
+        <!-- Поле ввода -->
+        <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+          <span style="font-size:.9rem;color:#555">или введите вручную:</span>
+          <input type="number" name="rotation_minutes" id="rotation_minutes" value="30" min="1" max="10080"
+            class="fi" style="width:90px;padding:.4rem .6rem;font-size:.95rem"
+            onclick="event.stopPropagation()" oninput="clearPresets()">
+          <span style="font-size:.9rem;color:#555">минут</span>
+        </div>
       </div>
     </div>
 
@@ -985,6 +1002,30 @@ def new_test():
   </div>
 
   <script>
+  var PRESETS = {{ '1h': 60, '4h': 240, '1d': 1440, '1w': 10080 }};
+
+  function applyPreset(cb, key) {{
+    // Снимаем остальные галочки
+    ['1h','4h','1d','1w'].forEach(function(k) {{
+      var el = document.getElementById('preset_' + k);
+      var lbl = document.getElementById('preset_label_' + k);
+      if (el && k !== key) {{ el.checked = false; }}
+      if (lbl) lbl.style.borderColor = (k === key && cb.checked) ? '#667eea' : '#d0d0d0';
+    }});
+    // Вставляем значение
+    var inp = document.getElementById('rotation_minutes');
+    if (inp) inp.value = cb.checked ? PRESETS[key] : 30;
+  }}
+
+  function clearPresets() {{
+    ['1h','4h','1d','1w'].forEach(function(k) {{
+      var el = document.getElementById('preset_' + k);
+      var lbl = document.getElementById('preset_label_' + k);
+      if (el) el.checked = false;
+      if (lbl) lbl.style.borderColor = '#d0d0d0';
+    }});
+  }}
+
   function selectStrategy(val) {{
     ['time','views','clicks'].forEach(function(v) {{
       var opt = document.getElementById('s_' + v);
