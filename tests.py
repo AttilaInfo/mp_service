@@ -536,7 +536,7 @@ def test_detail(test_id):
             # Заголовок
             + '<div style="background:' + hdr_bg + ';color:' + hdr_clr + ';padding:.4rem .8rem;'
             'display:flex;justify-content:space-between;align-items:center;font-size:.85rem;font-weight:700">'
-            + '<span>Вариант ' + v['label'] + '</span>'
+            + '<span>Вариант ' + str(ord(v['label']) - 64) + '</span>'
             + ('</div>' )
 
             # Фото 3:4
