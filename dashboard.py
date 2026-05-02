@@ -418,7 +418,7 @@ function addVariantWithUrl(url, hint, isFirst) {
   var card = document.createElement('div');
   card.id = 'variant_card_' + variantCount;
   card.setAttribute('data-num', variantCount);
-  card.style.cssText = 'border:2px solid #e0e0e0;border-radius:10px;overflow:hidden;background:#fff;position:relative';
+  card.style.cssText = 'border-radius:10px;overflow:hidden;background:#fff;position:relative';
   var headerBg = isFirst ? '#27ae60' : '#667eea';
   var delBtn = variantCount > 1
     ? '<button type="button" onclick="removeVariant(this)" style="background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;font-size:1.2rem;padding:0;line-height:1">&times;</button>'
@@ -429,11 +429,9 @@ function addVariantWithUrl(url, hint, isFirst) {
   card.innerHTML =
     '<div style="background:' + headerBg + ';color:#fff;padding:.35rem .7rem;font-size:.82rem;font-weight:700;display:flex;justify-content:space-between;align-items:center">'
     + '<span>' + label + (isFirst ? ' — текущее' : '') + '</span>' + delBtn + '</div>'
-    + '<div style="padding:.65rem">'
-    + '<div id="preview_' + variantCount + '" style="width:100%;aspect-ratio:3/4;background:#f8f9fa;border-radius:6px;margin-bottom:.5rem;overflow:hidden;display:flex;align-items:center;justify-content:center">'
+    + '<div id="preview_' + variantCount + '" style="width:100%;aspect-ratio:3/4;background:#f0f2f5;overflow:hidden;display:flex;align-items:center;justify-content:center">'
     + previewHtml + '</div>'
-    + '<input type="url" name="photo_' + variantCount + '" value="' + (url || '') + '" class="fi" placeholder="https://..." required style="display:none" oninput="livePreview(' + variantCount + ', this.value)">'
-    + '</div>';
+    + '<input type="url" name="photo_' + variantCount + '" value="' + (url || '') + '" class="fi" placeholder="https://..." required style="display:none" oninput="livePreview(' + variantCount + ', this.value)">';
   grid.appendChild(card);
   updateCountLabel();
 }
@@ -962,7 +960,11 @@ def new_test():
   <!-- Варианты фото -->
   <div class="fg">
     <label>Варианты фото <span style="color:#667eea;font-size:.85rem">(от 2 до 10)</span></label>
-    <div id="variants_grid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:.5rem;margin-top:.5rem"></div>
+    <style>
+      #variants_grid { display:grid; grid-template-columns:repeat(5,1fr); gap:.5rem; margin-top:.5rem }
+      @media(max-width:600px){ #variants_grid { grid-template-columns:repeat(2,1fr) !important } }
+    </style>
+    <div id="variants_grid"></div>
     <div style="display:flex;gap:.75rem;align-items:center;margin-top:.75rem">
       <button type="button" onclick="openPhotoModal()" id="add_variant_btn"
         style="background:#f0f2f5;border:2px dashed #d0d0d0;border-radius:10px;padding:.6rem 1.2rem;cursor:pointer;color:#667eea;font-size:.9rem;font-weight:600">
