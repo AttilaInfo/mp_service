@@ -96,6 +96,9 @@ def should_rotate(test, variant, strategy):
     now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     if s['type'] == 'time':
+        # Если ротаций ещё не было — первая ротация сразу
+        if not (test.get('rotation_count') or 0):
+            return True
         last = test.get('last_rotated_at')
         if not last:
             return True
