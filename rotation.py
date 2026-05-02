@@ -173,33 +173,37 @@ def get_product_info(key, offer_id):
     return None
 
 
-def set_main_photo(key, offer_id, photo_url, all_images):
+def set_main_photo(key, offer_id, product_id, photo_url, all_images):
     """
-    Меняет главное фото товара через /v1/product/update.
-    photo_url — новое главное фото (первое в списке).
-    all_images — все текущие фото товара (чтобы не потерять остальные).
+    Меняет главное фото товара через /v1/product/pictures/import.
+    Озон принимает список URL — первый становится главным фото.
     """
     # Строим список: новое фото первым, остальные за ним (без дублей)
     images = [photo_url]
     for img in all_images:
-        if img != photo_url:
+        if isinstance(img, str) and img.startswith('http') and img != photo_url:
             images.append(img)
 
     payload = {
-        'offer_id': offer_id,
-        'images':   images[:15],   # Озон принимает максимум 15 фото
+        'product_id': product_id,
+        'images':     images[:10],   # Озон принимает до 10 фото через этот метод
+        'color_image': ''
     }
     try:
         r = requests.post(
-            f'{OZON_API_URL}/v1/product/update',
+            f'{OZON_API_URL}/v1/product/pictures/import',
             headers=ozon_headers(key),
             json=payload,
             timeout=20
         )
+        log.info(f'  pictures/import status={r.status_code} body={r.text[:300]}')
         if r.status_code == 200:
-            log.info(f'  Фото обновлено: {offer_id} → {photo_url[:60]}')
+            result = r.json()
+            # Озон возвращает task_id — фото применяется асинхронно
+            task_id = result.get('task_id') or result.get('result', {}).get('task_id')
+            log.info(f'  Фото отправлено в Озон: {offer_id} → {photo_url[:60]} task_id={task_id}')
             return True
-        log.warning(f'  product/update {r.status_code}: {r.text[:300]}')
+        log.warning(f'  pictures/import {r.status_code}: {r.text[:300]}')
     except Exception as e:
         log.error(f'  set_main_photo error: {e}')
     return False
@@ -395,30 +399,32 @@ def _apply_photo(test, key, variant, all_variants):
         log.warning(f'  Фото локальное — невозможно применить без CDN: {photo_url[:60]}')
         return False
 
-    # Собираем все изображения товара (текущие + варианты)
+    # Получаем информацию о товаре (нужен product_id)
     product = get_product_info(key, test['sku'])
     if not product:
         log.warning(f'  Не удалось получить информацию о товаре {test["sku"]}')
         return False
 
-    # Существующие фото товара
-    existing = []
-    primary = product.get('primary_image', [])
-    if isinstance(primary, list):
-        existing.extend(primary)
-    elif isinstance(primary, str) and primary:
-        existing.append(primary)
-    imgs = product.get('images', [])
-    if isinstance(imgs, list):
-        existing.extend(i for i in imgs if isinstance(i, str))
+    product_id = product.get('id') or product.get('product_id')
+    if not product_id:
+        log.warning(f'  Не удалось получить product_id для {test["sku"]}')
+        return False
 
-    # Добавляем фото всех вариантов (чтобы не потерять)
+    # Собираем все публичные фото вариантов
+    existing = []
     for v in all_variants:
         url = v.get('photo_url', '')
         if url.startswith('http') and url not in existing:
             existing.append(url)
 
-    return set_main_photo(key, test['sku'], photo_url, existing)
+    # Добавляем текущие фото с Озона
+    imgs = product.get('images', [])
+    if isinstance(imgs, list):
+        for img in imgs:
+            if isinstance(img, str) and img.startswith('http') and img not in existing:
+                existing.append(img)
+
+    return set_main_photo(key, test['sku'], product_id, photo_url, existing)
 
 
 # ── Точка входа ───────────────────────────────────────────────────────────────
