@@ -961,8 +961,8 @@ def new_test():
   <div class="fg">
     <label>Варианты фото <span style="color:#667eea;font-size:.85rem">(от 2 до 10)</span></label>
     <style>
-      #variants_grid { display:grid; grid-template-columns:repeat(5,1fr); gap:.5rem; margin-top:.5rem }
-      @media(max-width:600px){ #variants_grid { grid-template-columns:repeat(2,1fr) !important } }
+      #variants_grid {{ display:grid; grid-template-columns:repeat(5,1fr); gap:.5rem; margin-top:.5rem }}
+      @media(max-width:600px){{ #variants_grid {{ grid-template-columns:repeat(2,1fr) !important }} }}
     </style>
     <div id="variants_grid"></div>
     <div style="display:flex;gap:.75rem;align-items:center;margin-top:.75rem">
