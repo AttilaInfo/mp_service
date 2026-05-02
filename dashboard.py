@@ -401,7 +401,7 @@ function patchSelectProduct() {
       addVariantWithUrl(img || '', 'текущее фото', true);
     } else {
       var prev = document.getElementById('preview_1');
-      if (prev && img) prev.innerHTML = '<img src="' + img + '" style="width:100%;height:100%;object-fit:contain;background:#fff">';
+      if (prev && img) prev.innerHTML = '<img src="' + img + '" style="width:100%;height:100%;object-fit:cover">';
       var inp = document.querySelector('input[name="photo_1"]');
       if (inp) inp.value = img || '';
     }
@@ -424,7 +424,7 @@ function addVariantWithUrl(url, hint, isFirst) {
     ? '<button type="button" onclick="removeVariant(this)" style="background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;font-size:1.2rem;padding:0;line-height:1">&times;</button>'
     : '';
   var previewHtml = url
-    ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:contain;background:#fff" onerror="this.parentElement.innerHTML=\'&#128247;\'">'
+    ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'&#128247;\'">'
     : '<span style="font-size:2.5rem">&#128247;</span>';
   card.innerHTML =
     '<div style="background:' + headerBg + ';color:#fff;padding:.35rem .7rem;font-size:.82rem;font-weight:700;display:flex;justify-content:space-between;align-items:center">'
@@ -442,7 +442,7 @@ function livePreview(n, url) {
   var prev = document.getElementById('preview_' + n);
   if (!prev) return;
   prev.innerHTML = (url && url.startsWith('http'))
-    ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:contain;background:#fff" onerror="this.parentElement.innerHTML=\'<span style=font-size:2.5rem>&#128247;</span>\'">'
+    ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'<span style=font-size:2.5rem>&#128247;</span>\'">'
     : '<span style="font-size:2.5rem">&#128247;</span>';
 }
 
@@ -484,7 +484,7 @@ function openPhotoModal() {
       var prev = document.getElementById('url_preview');
       if (!prev) return;
       prev.innerHTML = (this.value && this.value.startsWith('http'))
-        ? '<img src="' + this.value + '" style="width:100%;height:100%;object-fit:contain;background:#fff" onerror="this.parentElement.innerHTML=\'&#128247;\'">'
+        ? '<img src="' + this.value + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'&#128247;\'">'
         : '&#128247;';
     });
   }
@@ -547,7 +547,7 @@ function handleFiles(files) {
         currentFiles.push(e.target.result);
         var thumb = document.createElement('div');
         thumb.style.cssText = 'display:inline-block;width:80px;height:80px;margin:.3rem;border-radius:6px;overflow:hidden;border:2px solid #e0e0e0';
-        thumb.innerHTML = '<img src="' + e.target.result + '" style="width:100%;height:100%;object-fit:contain;background:#fff">';
+        thumb.innerHTML = '<img src="' + e.target.result + '" style="width:100%;height:100%;object-fit:cover">';
         previewWrap.appendChild(thumb);
         if (currentFiles.length === toAdd) {
           var cb = document.getElementById('confirm_disk_btn');
@@ -962,7 +962,7 @@ def new_test():
   <!-- Варианты фото -->
   <div class="fg">
     <label>Варианты фото <span style="color:#667eea;font-size:.85rem">(от 2 до 10)</span></label>
-    <div id="variants_grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.75rem;margin-top:.5rem"></div>
+    <div id="variants_grid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:.5rem;margin-top:.5rem"></div>
     <div style="display:flex;gap:.75rem;align-items:center;margin-top:.75rem">
       <button type="button" onclick="openPhotoModal()" id="add_variant_btn"
         style="background:#f0f2f5;border:2px dashed #d0d0d0;border-radius:10px;padding:.6rem 1.2rem;cursor:pointer;color:#667eea;font-size:.9rem;font-weight:600">
