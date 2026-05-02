@@ -133,9 +133,12 @@ function handleFiles(files) {
       var reader = new FileReader();
       reader.onload = function(e) {
         var previewUrl = e.target.result;
-        // Добавляем карточку с превью сразу
+        // Добавляем карточку с превью (base64 только для img, не для hidden input)
         addVariantWithUrl(previewUrl, '', false);
         var cardNum = variantCount; // номер только что добавленной карточки
+        // Сразу очищаем hidden input — там не должен быть base64
+        var hiddenInp = document.querySelector('input[name="photo_' + cardNum + '"]');
+        if (hiddenInp) hiddenInp.value = '';
 
         // Сжимаем изображение перед отправкой (макс 1600px, качество 0.85)
         var img = new Image();
