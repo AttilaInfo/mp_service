@@ -478,7 +478,7 @@ function openPhotoModal() {
   if (dp) dp.style.display = 'none';
   var cb = document.getElementById('confirm_disk_btn');
   if (cb) cb.style.display = 'none';
-  switchTab('url');
+  switchTab('disk');
   // Вешаем listener на url_input
   if (urlInp && !urlInp._inited) {
     urlInp._inited = true;
@@ -984,17 +984,13 @@ def new_test():
     </div>
     <!-- Вкладки -->
     <div style="display:flex;border-bottom:2px solid #f0f0f0;margin-bottom:1.2rem;gap:.5rem">
-      <button type="button" id="tab_url" onclick="switchTab('url')"
-        style="padding:.5rem 1rem;border:none;background:none;cursor:pointer;font-size:.9rem;font-weight:600;color:#667eea;border-bottom:2px solid #667eea;margin-bottom:-2px">
-        По ссылке
-      </button>
       <button type="button" id="tab_disk" onclick="switchTab('disk')"
-        style="padding:.5rem 1rem;border:none;background:none;cursor:pointer;font-size:.9rem;color:#888;border-bottom:2px solid transparent;margin-bottom:-2px">
+        style="padding:.5rem 1rem;border:none;background:none;cursor:pointer;font-size:.9rem;font-weight:600;color:#667eea;border-bottom:2px solid #667eea;margin-bottom:-2px">
         С диска
       </button>
-      <button type="button" id="tab_saved" onclick="switchTab('saved')"
+      <button type="button" id="tab_url" onclick="switchTab('url')"
         style="padding:.5rem 1rem;border:none;background:none;cursor:pointer;font-size:.9rem;color:#888;border-bottom:2px solid transparent;margin-bottom:-2px">
-        Из загруженных
+        По ссылке
       </button>
     </div>
 
@@ -1024,12 +1020,6 @@ def new_test():
       <button type="button" id="confirm_disk_btn" onclick="confirmDisk()" class="btn bp" style="width:100%;display:none">Добавить этот вариант</button>
     </div>
 
-    <!-- Вкладка: Из загруженных -->
-    <div id="panel_saved" style="display:none">
-      <div id="saved_grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;max-height:300px;overflow-y:auto">
-        <div style="color:#888;font-size:.85rem;padding:1rem;grid-column:1/-1;text-align:center">Здесь появятся ранее загруженные фото</div>
-      </div>
-    </div>
   </div>
 </div>
 
