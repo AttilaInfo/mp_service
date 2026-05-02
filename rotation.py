@@ -140,10 +140,34 @@ def get_product_info(key, offer_id):
             json={'offer_id': [offer_id]},
             timeout=15
         )
+        log.info(f'  product/info/list status={r.status_code} body={r.text[:300]}')
         if r.status_code == 200:
-            items = (r.json().get('result') or {}).get('items') or []
-            return items[0] if items else None
-        log.warning(f'product/info/list {r.status_code}: {r.text[:200]}')
+            data  = r.json()
+            items = (data.get('result') or {}).get('items') or data.get('items') or []
+            if items:
+                return items[0]
+            # Если по offer_id не нашли — пробуем без фильтра (первый товар)
+            log.warning(f'  Товар {offer_id} не найден по offer_id, пробуем product/list')
+            r2 = requests.post(
+                f'{OZON_API_URL}/v3/product/list',
+                headers=ozon_headers(key),
+                json={'filter': {'offer_id': [offer_id]}, 'limit': 1},
+                timeout=15
+            )
+            log.info(f'  product/list status={r2.status_code} body={r2.text[:300]}')
+            if r2.status_code == 200:
+                pids = [x['product_id'] for x in r2.json().get('result', {}).get('items', [])]
+                if pids:
+                    r3 = requests.post(
+                        f'{OZON_API_URL}/v3/product/info/list',
+                        headers=ozon_headers(key),
+                        json={'product_id': pids},
+                        timeout=15
+                    )
+                    if r3.status_code == 200:
+                        items3 = (r3.json().get('result') or {}).get('items') or []
+                        return items3[0] if items3 else None
+        log.warning(f'  product/info/list {r.status_code}: {r.text[:200]}')
     except Exception as e:
         log.error(f'get_product_info error: {e}')
     return None
