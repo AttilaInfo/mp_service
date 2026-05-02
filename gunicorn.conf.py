@@ -1,19 +1,12 @@
-import os
+# gunicorn.conf.py — zero-downtime деплой
 
-# Количество воркеров
-workers = int(os.environ.get('GUNICORN_WORKERS', 2))
+bind            = '0.0.0.0:8080'
+workers         = 2
+timeout         = 120
+graceful_timeout = 30   # ждём 30 сек пока текущие запросы завершатся
+keepalive       = 5
 
-# Таймаут — увеличиваем до 120 сек для загрузки файлов до 10 МБ
-timeout = 120
-
-# Адрес и порт
-bind = f"0.0.0.0:{os.environ.get('PORT', '8080')}"
-
-# Логирование
-accesslog = '-'
-errorlog = '-'
-loglevel = 'info'
-
-# Размер буфера для загрузки файлов (32 МБ)
-limit_request_line = 0
-limit_request_fields = 200
+# Логи в stdout — Railway их подхватывает
+accesslog  = '-'
+errorlog   = '-'
+loglevel   = 'info'
