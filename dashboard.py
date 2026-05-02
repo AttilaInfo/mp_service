@@ -401,7 +401,7 @@ function patchSelectProduct() {
       addVariantWithUrl(img || '', 'текущее фото', true);
     } else {
       var prev = document.getElementById('preview_1');
-      if (prev && img) prev.innerHTML = '<img src="' + img + '" style="width:100%;height:100%;object-fit:cover">';
+      if (prev && img) prev.innerHTML = '<img src="' + img + '" style="width:100%;height:100%;object-fit:contain;background:#fff">';
       var inp = document.querySelector('input[name="photo_1"]');
       if (inp) inp.value = img || '';
     }
@@ -412,7 +412,7 @@ patchSelectProduct();
 function addVariantWithUrl(url, hint, isFirst) {
   if (variantCount >= MAX_VARIANTS) return;
   variantCount++;
-  var label = String.fromCharCode(64 + variantCount);
+  var label = String(variantCount);
   var grid = document.getElementById('variants_grid');
   if (!grid) return;
   var card = document.createElement('div');
@@ -424,13 +424,13 @@ function addVariantWithUrl(url, hint, isFirst) {
     ? '<button type="button" onclick="removeVariant(this)" style="background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;font-size:1.2rem;padding:0;line-height:1">&times;</button>'
     : '';
   var previewHtml = url
-    ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'&#128247;\'">'
+    ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:contain;background:#fff" onerror="this.parentElement.innerHTML=\'&#128247;\'">'
     : '<span style="font-size:2.5rem">&#128247;</span>';
   card.innerHTML =
     '<div style="background:' + headerBg + ';color:#fff;padding:.35rem .7rem;font-size:.82rem;font-weight:700;display:flex;justify-content:space-between;align-items:center">'
     + '<span>' + label + (isFirst ? ' — текущее' : '') + '</span>' + delBtn + '</div>'
     + '<div style="padding:.65rem">'
-    + '<div id="preview_' + variantCount + '" style="width:100%;aspect-ratio:4/5;background:#f8f9fa;border-radius:6px;margin-bottom:.5rem;overflow:hidden;display:flex;align-items:center;justify-content:center">'
+    + '<div id="preview_' + variantCount + '" style="width:100%;aspect-ratio:3/4;background:#f8f9fa;border-radius:6px;margin-bottom:.5rem;overflow:hidden;display:flex;align-items:center;justify-content:center">'
     + previewHtml + '</div>'
     + '<input type="url" name="photo_' + variantCount + '" value="' + (url || '') + '" class="fi" placeholder="https://..." required style="display:none" oninput="livePreview(' + variantCount + ', this.value)">'
     + '</div>';
@@ -442,7 +442,7 @@ function livePreview(n, url) {
   var prev = document.getElementById('preview_' + n);
   if (!prev) return;
   prev.innerHTML = (url && url.startsWith('http'))
-    ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'<span style=font-size:2.5rem>&#128247;</span>\'">'
+    ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:contain;background:#fff" onerror="this.parentElement.innerHTML=\'<span style=font-size:2.5rem>&#128247;</span>\'">'
     : '<span style="font-size:2.5rem">&#128247;</span>';
 }
 
@@ -484,7 +484,7 @@ function openPhotoModal() {
       var prev = document.getElementById('url_preview');
       if (!prev) return;
       prev.innerHTML = (this.value && this.value.startsWith('http'))
-        ? '<img src="' + this.value + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'&#128247;\'">'
+        ? '<img src="' + this.value + '" style="width:100%;height:100%;object-fit:contain;background:#fff" onerror="this.parentElement.innerHTML=\'&#128247;\'">'
         : '&#128247;';
     });
   }
@@ -547,7 +547,7 @@ function handleFiles(files) {
         currentFiles.push(e.target.result);
         var thumb = document.createElement('div');
         thumb.style.cssText = 'display:inline-block;width:80px;height:80px;margin:.3rem;border-radius:6px;overflow:hidden;border:2px solid #e0e0e0';
-        thumb.innerHTML = '<img src="' + e.target.result + '" style="width:100%;height:100%;object-fit:cover">';
+        thumb.innerHTML = '<img src="' + e.target.result + '" style="width:100%;height:100%;object-fit:contain;background:#fff">';
         previewWrap.appendChild(thumb);
         if (currentFiles.length === toAdd) {
           var cb = document.getElementById('confirm_disk_btn');
