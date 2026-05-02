@@ -69,7 +69,7 @@ function addVariantWithUrl(url, hint, isFirst) {
     + '<span>' + label + (isFirst ? ' — текущее' : '') + '</span>' + delBtn + '</div>'
     + '<div id="preview_' + variantCount + '" style="width:100%;aspect-ratio:3/4;background:#f0f2f5;overflow:hidden;display:flex;align-items:center;justify-content:center">'
     + previewHtml + '</div>'
-    + '<input type="url" name="photo_' + variantCount + '" value="' + (url || '') + '" class="fi" placeholder="https://..." required style="display:none">';
+    + '<input type="url" name="photo_' + variantCount + '" value="' + (url || '') + '" class="fi" placeholder="https://..." style="display:none">';
   grid.appendChild(card);
   updateCountLabel();
 }
@@ -170,6 +170,43 @@ function handleDrop(e) {
   e.preventDefault();
   handleFiles(e.dataTransfer.files);
 }
+
+// Валидация формы перед отправкой
+document.addEventListener('DOMContentLoaded', function() {
+  var form = document.getElementById('test_form');
+  if (!form) return;
+  form.addEventListener('submit', function(e) {
+    // Проверяем товар
+    var product = document.getElementById('product_val');
+    if (!product || !product.value.trim()) {
+      e.preventDefault();
+      alert('Выберите товар для теста');
+      return;
+    }
+    // Считаем варианты с заполненным фото
+    var filled = 0;
+    var empty = [];
+    for (var i = 1; i <= 10; i++) {
+      var inp = document.querySelector('input[name="photo_' + i + '"]');
+      if (!inp) break;
+      if (inp.value.trim()) {
+        filled++;
+      } else {
+        empty.push(i);
+      }
+    }
+    if (filled < 2) {
+      e.preventDefault();
+      alert('Добавьте минимум 2 варианта фото');
+      return;
+    }
+    if (empty.length > 0) {
+      e.preventDefault();
+      alert('Фото ещё загружаются, подождите несколько секунд и попробуйте снова');
+      return;
+    }
+  });
+});
 
     """, mimetype='application/javascript')
 
