@@ -722,13 +722,16 @@ def new_test():
 </div>
 {err_html}
 <div class="box">
-<form method="POST" action="/tests/create">
+<form method="POST" action="/tests/create" id="test_form">
   <div class="fg"><label>Магазин</label>
     <select name="key_id" class="fi" required>{shops_opts}</select>
   </div>
+
+  <!-- Товар -->
   <div class="fg" style="position:relative">
     <label>Товар <span style="color:#27ae60;font-size:.85rem">(с остатками)</span></label>
     <input type="hidden" name="product" id="product_val">
+    <input type="hidden" id="product_img" value="">
     <div style="position:relative">
       <input type="text" id="prod_search" class="fi" autocomplete="off" placeholder="Выберите карточку..." style="padding-right:2rem">
       <button type="button" id="prod_clear" onclick="clearSearch()" style="display:none;position:absolute;right:.5rem;top:50%;transform:translateY(-50%);background:none;border:none;color:#aaa;cursor:pointer;font-size:1.2rem;padding:0;line-height:1">&times;</button>
@@ -748,14 +751,21 @@ def new_test():
     </div>
     <div class="hn" id="prod_hint_text">Нажмите на поле — появится список товаров с остатками</div>
   </div>
+
+  <!-- Варианты фото -->
   <div class="fg">
     <label>Варианты фото <span style="color:#667eea;font-size:.85rem">(от 2 до 10)</span></label>
     <div id="variants_grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:1rem;margin-top:.5rem"></div>
     <div style="display:flex;gap:.75rem;align-items:center;margin-top:.75rem">
-      <button type="button" onclick="addVariant()" id="add_variant_btn" style="background:#f0f2f5;border:2px dashed #d0d0d0;border-radius:10px;padding:.6rem 1.2rem;cursor:pointer;color:#667eea;font-size:.9rem;font-weight:600">+ Добавить вариант</button>
-      <span id="variant_count_label" style="font-size:.82rem;color:#888">Добавлено: 0 из 10</span>
+      <button type="button" onclick="openPhotoModal()" id="add_variant_btn"
+        style="background:#f0f2f5;border:2px dashed #d0d0d0;border-radius:10px;padding:.6rem 1.2rem;cursor:pointer;color:#667eea;font-size:.9rem;font-weight:600">
+        + Добавить вариант
+      </button>
+      <span id="variant_count_label" style="font-size:.82rem;color:#888">Добавлено: 1 из 10</span>
     </div>
   </div>
+
+  <!-- Стратегия -->
   <div class="fg"><label>Стратегия ротации</label>
     <select name="strategy" class="fi">
       <option value="round_robin">По очереди (Round Robin) — равномерно</option>
@@ -767,9 +777,92 @@ def new_test():
   <button class="btn bp" style="width:100%">&#129514; Запустить тест</button>
 </form>
 </div>
+
+<!-- Модальное окно загрузки фото -->
+<div id="photo_modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:16px;padding:1.5rem;width:min(480px,95vw);max-height:90vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.2rem">
+      <h3 style="margin:0;font-size:1.1rem">Добавить фото варианта</h3>
+      <button onclick="closePhotoModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#aaa">&times;</button>
+    </div>
+    <!-- Вкладки -->
+    <div style="display:flex;border-bottom:2px solid #f0f0f0;margin-bottom:1.2rem;gap:.5rem">
+      <button type="button" id="tab_url" onclick="switchTab('url')"
+        style="padding:.5rem 1rem;border:none;background:none;cursor:pointer;font-size:.9rem;font-weight:600;color:#667eea;border-bottom:2px solid #667eea;margin-bottom:-2px">
+        По ссылке
+      </button>
+      <button type="button" id="tab_disk" onclick="switchTab('disk')"
+        style="padding:.5rem 1rem;border:none;background:none;cursor:pointer;font-size:.9rem;color:#888;border-bottom:2px solid transparent;margin-bottom:-2px">
+        С диска
+      </button>
+      <button type="button" id="tab_saved" onclick="switchTab('saved')"
+        style="padding:.5rem 1rem;border:none;background:none;cursor:pointer;font-size:.9rem;color:#888;border-bottom:2px solid transparent;margin-bottom:-2px">
+        Из загруженных
+      </button>
+    </div>
+
+    <!-- Вкладка: По ссылке -->
+    <div id="panel_url">
+      <label style="font-size:.85rem;color:#666;display:block;margin-bottom:.4rem">URL фото (JPEG, PNG, WebP)</label>
+      <input type="url" id="url_input" class="fi" placeholder="https://cdn1.ozone.ru/..." style="margin-bottom:.8rem">
+      <div id="url_preview" style="width:100%;height:160px;background:#f0f2f5;border-radius:8px;margin-bottom:1rem;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#ccc;font-size:3rem">&#128247;</div>
+      <button type="button" onclick="confirmUrl()" class="btn bp" style="width:100%">Добавить этот вариант</button>
+    </div>
+
+    <!-- Вкладка: С диска -->
+    <div id="panel_disk" style="display:none">
+      <div id="drop_zone" onclick="document.getElementById('file_inp').click()"
+        style="border:2px dashed #d0d0d0;border-radius:10px;padding:2rem;text-align:center;cursor:pointer;margin-bottom:.8rem;transition:border-color .2s"
+        ondragover="event.preventDefault();this.style.borderColor='#667eea'"
+        ondragleave="this.style.borderColor='#d0d0d0'"
+        ondrop="handleDrop(event)">
+        <div style="font-size:2.5rem;margin-bottom:.5rem">&#128444;</div>
+        <div style="font-weight:600;color:#444">Перетащите файл или кликните</div>
+        <div style="font-size:.8rem;color:#aaa;margin-top:.3rem">JPG, PNG, WebP · до 10 МБ</div>
+      </div>
+      <input type="file" id="file_inp" accept="image/*" style="display:none" onchange="handleFile(this.files[0])">
+      <div id="disk_preview" style="display:none;width:100%;height:160px;background:#f0f2f5;border-radius:8px;margin-bottom:1rem;overflow:hidden">
+        <img id="disk_img" style="width:100%;height:100%;object-fit:cover">
+      </div>
+      <button type="button" id="confirm_disk_btn" onclick="confirmDisk()" class="btn bp" style="width:100%;display:none">Добавить этот вариант</button>
+    </div>
+
+    <!-- Вкладка: Из загруженных -->
+    <div id="panel_saved" style="display:none">
+      <div id="saved_grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;max-height:300px;overflow-y:auto">
+        <div style="color:#888;font-size:.85rem;padding:1rem;grid-column:1/-1;text-align:center">Здесь появятся ранее загруженные фото</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
-var variantCount = 0, MAX_VARIANTS = 10, MIN_VARIANTS = 2;
-function addVariant() {{
+var variantCount = 0;
+var MAX_VARIANTS = 10;
+var savedPhotos = [];
+var currentFileDataUrl = null;
+
+// При выборе товара — автоматически добавляем Вариант А с текущим фото
+var origSelectProduct = null;
+document.addEventListener('DOMContentLoaded', function() {{
+  origSelectProduct = window.selectProduct;
+  window.selectProduct = function(sku, name, img) {{
+    if (origSelectProduct) origSelectProduct(sku, name, img);
+    document.getElementById('product_img').value = img || '';
+    // Если вариант А ещё не добавлен — добавляем
+    if (variantCount === 0) {{
+      addVariantWithUrl(img || '', 'Вариант А (текущее фото)', true);
+    }} else {{
+      // Обновляем превью первого варианта
+      var prev = document.getElementById('preview_1');
+      if (prev && img) prev.innerHTML = '<img src="' + img + '" style="width:100%;height:100%;object-fit:cover">';
+      var inp = document.querySelector('input[name="photo_1"]');
+      if (inp) inp.value = img || '';
+    }}
+  }};
+}});
+
+function addVariantWithUrl(url, hint, isFirst) {{
   if (variantCount >= MAX_VARIANTS) return;
   variantCount++;
   var label = String.fromCharCode(64 + variantCount);
@@ -777,30 +870,36 @@ function addVariant() {{
   var card = document.createElement('div');
   card.id = 'variant_card_' + variantCount;
   card.setAttribute('data-num', variantCount);
-  card.style.cssText = 'border:2px solid #e0e0e0;border-radius:10px;overflow:hidden;position:relative;background:#fff';
-  var delBtn = variantCount > MIN_VARIANTS ? '<button type="button" onclick="removeVariant(this)" style="background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;font-size:1.1rem;padding:0;line-height:1">&times;</button>' : '';
+  card.style.cssText = 'border:2px solid #e0e0e0;border-radius:10px;overflow:hidden;background:#fff;position:relative';
+  var headerBg = isFirst ? '#27ae60' : '#667eea';
+  var delBtn = variantCount > 1 ? '<button type="button" onclick="removeVariant(this)" style="background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;font-size:1.1rem;padding:0;line-height:1">&times;</button>' : '';
   card.innerHTML =
-    '<div style="background:#667eea;color:#fff;padding:.35rem .7rem;font-size:.82rem;font-weight:700;display:flex;justify-content:space-between;align-items:center">'
-    + '<span>Вариант ' + label + '</span>' + delBtn + '</div>'
+    '<div style="background:' + headerBg + ';color:#fff;padding:.35rem .7rem;font-size:.82rem;font-weight:700;display:flex;justify-content:space-between;align-items:center">'
+    + '<span>' + label + (isFirst ? ' — текущее' : '') + '</span>' + delBtn + '</div>'
     + '<div style="padding:.65rem">'
-    + '<div id="preview_' + variantCount + '" style="width:100%;height:130px;background:#f0f2f5;border-radius:6px;margin-bottom:.5rem;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#ccc;font-size:2.5rem">&#128247;</div>'
-    + '<input type="url" name="photo_' + variantCount + '" class="fi" placeholder="https://..." required style="font-size:.78rem;padding:.4rem .6rem" oninput="updatePreview(' + variantCount + ', this.value)">'
-    + '<div style="font-size:.72rem;color:#aaa;margin-top:.25rem">Вставьте URL фото</div>'
+    + '<div id="preview_' + variantCount + '" style="width:100%;height:130px;background:#f0f2f5;border-radius:6px;margin-bottom:.5rem;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#ccc;font-size:2.5rem">'
+    + (url ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'&#128247;\'">' : '&#128247;')
+    + '</div>'
+    + '<input type="url" name="photo_' + variantCount + '" value="' + url + '" class="fi" placeholder="https://..." required style="font-size:.78rem;padding:.4rem .6rem" oninput="livePreview(' + variantCount + ', this.value)">'
+    + (hint ? '<div style="font-size:.72rem;color:#aaa;margin-top:.25rem">' + hint + '</div>' : '')
     + '</div>';
   grid.appendChild(card);
   updateCountLabel();
 }}
-function updatePreview(n, url) {{
+
+function livePreview(n, url) {{
   var prev = document.getElementById('preview_' + n);
   if (!prev) return;
   prev.innerHTML = (url && url.startsWith('http'))
     ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'&#128247;\'">'
     : '&#128247;';
 }}
+
 function removeVariant(btn) {{
   var card = btn.closest('[data-num]');
   if (card) {{ card.remove(); updateCountLabel(); }}
 }}
+
 function updateCountLabel() {{
   var n = document.getElementById('variants_grid').children.length;
   variantCount = n;
@@ -808,7 +907,106 @@ function updateCountLabel() {{
   var b = document.getElementById('add_variant_btn');
   if (b) b.style.opacity = n >= MAX_VARIANTS ? '.4' : '1';
 }}
-addVariant(); addVariant();
+
+// Модальное окно
+function openPhotoModal() {{
+  if (variantCount >= MAX_VARIANTS) return;
+  document.getElementById('photo_modal').style.display = 'flex';
+  document.getElementById('url_input').value = '';
+  document.getElementById('url_preview').innerHTML = '&#128247;';
+  currentFileDataUrl = null;
+  document.getElementById('disk_preview').style.display = 'none';
+  document.getElementById('confirm_disk_btn').style.display = 'none';
+  switchTab('url');
+}}
+
+function closePhotoModal() {{
+  document.getElementById('photo_modal').style.display = 'none';
+}}
+
+function switchTab(tab) {{
+  ['url','disk','saved'].forEach(function(t) {{
+    document.getElementById('panel_' + t).style.display = t === tab ? 'block' : 'none';
+    var btn = document.getElementById('tab_' + t);
+    btn.style.color = t === tab ? '#667eea' : '#888';
+    btn.style.borderBottomColor = t === tab ? '#667eea' : 'transparent';
+    btn.style.fontWeight = t === tab ? '600' : '400';
+  }});
+}}
+
+// Вкладка URL
+document.addEventListener('DOMContentLoaded', function() {{
+  var urlInp = document.getElementById('url_input');
+  if (urlInp) urlInp.addEventListener('input', function() {{
+    var v = this.value;
+    var prev = document.getElementById('url_preview');
+    if (v && v.startsWith('http')) {{
+      prev.innerHTML = '<img src="' + v + '" style="width:100%;height:100%;object-fit:cover" onerror="this.innerHTML=\'&#128247;\'">';
+    }} else {{
+      prev.innerHTML = '&#128247;';
+    }}
+  }});
+}});
+
+function confirmUrl() {{
+  var url = document.getElementById('url_input').value.trim();
+  if (!url) return alert('Введите URL фото');
+  addVariantWithUrl(url, '', false);
+  closePhotoModal();
+}}
+
+// Вкладка диск
+function handleFile(file) {{
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {{
+    currentFileDataUrl = e.target.result;
+    document.getElementById('disk_img').src = currentFileDataUrl;
+    document.getElementById('disk_preview').style.display = 'block';
+    document.getElementById('confirm_disk_btn').style.display = 'block';
+  }};
+  reader.readAsDataURL(file);
+}}
+
+function handleDrop(e) {{
+  e.preventDefault();
+  document.getElementById('drop_zone').style.borderColor = '#d0d0d0';
+  var file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) handleFile(file);
+}}
+
+function confirmDisk() {{
+  if (!currentFileDataUrl) return;
+  // Сохраняем в saved
+  savedPhotos.push(currentFileDataUrl);
+  addVariantWithUrl(currentFileDataUrl, '', false);
+  updateSavedGrid();
+  closePhotoModal();
+}}
+
+// Вкладка сохранённые
+function updateSavedGrid() {{
+  var grid = document.getElementById('saved_grid');
+  if (!savedPhotos.length) {{
+    grid.innerHTML = '<div style="color:#888;font-size:.85rem;padding:1rem;grid-column:1/-1;text-align:center">Нет загруженных фото</div>';
+    return;
+  }}
+  grid.innerHTML = savedPhotos.map(function(src, i) {{
+    return '<div onclick="selectSaved(' + i + ')" style="cursor:pointer;border-radius:8px;overflow:hidden;height:90px;background:#f0f2f5">'
+      + '<img src="' + src + '" style="width:100%;height:100%;object-fit:cover"></div>';
+  }}).join('');
+}}
+
+function selectSaved(i) {{
+  addVariantWithUrl(savedPhotos[i], '', false);
+  closePhotoModal();
+}}
+
+// Закрытие по клику вне модала
+document.addEventListener('click', function(e) {{
+  var modal = document.getElementById('photo_modal');
+  if (e.target === modal) closePhotoModal();
+}});
 </script>
 <script src="/static/product-search.js"></script>
 """
