@@ -931,7 +931,7 @@ def new_test():
   <div class="fg">
     <label>Стратегия смены фото</label>
     <div style="background:#fff8e1;border:1.5px solid #ffe082;border-radius:8px;padding:.6rem .9rem;margin-bottom:.8rem;font-size:.85rem;color:#5d4037">
-      &#128161; <strong>Важно:</strong> тест автоматически завершится, когда самый слабый вариант наберёт <strong>10 000 показов</strong> — это справедливо для любой стратегии.
+      &#128161; <strong>Важно:</strong> тест автоматически завершится, когда самый слабый вариант наберёт <strong>10 000 показов</strong> — это справедливо для любой стратегии. Вы также можете завершить тест самостоятельно в любое время.
     </div>
 
     <!-- Вариант 1: по времени -->
@@ -1010,8 +1010,8 @@ def new_test():
       <div style="font-size:.85rem;color:#666;margin-bottom:.7rem">Ротация происходит при достижении карточкой нужного числа кликов в корзину</div>
       <div id="s_clicks_fields" style="display:none;flex-direction:column;gap:.65rem">
         <div style="display:flex;gap:.5rem;flex-wrap:wrap" onclick="event.stopPropagation()">
-          <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer;background:#fff;border:1.5px solid #d0d0d0;border-radius:8px;padding:.35rem .75rem;font-size:.85rem;font-weight:500" id="cpreset_label_20">
-            <input type="checkbox" id="cpreset_20" onchange="applyClicksPreset(this,20)" style="accent-color:#667eea;cursor:pointer"> 20 кликов
+          <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer;background:#fff;border:1.5px solid #d0d0d0;border-radius:8px;padding:.35rem .75rem;font-size:.85rem;font-weight:500" id="cpreset_label_50">
+            <input type="checkbox" id="cpreset_50" onchange="applyClicksPreset(this,50)" style="accent-color:#667eea;cursor:pointer"> 50 кликов
           </label>
           <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer;background:#fff;border:1.5px solid #d0d0d0;border-radius:8px;padding:.35rem .75rem;font-size:.85rem;font-weight:500" id="cpreset_label_100">
             <input type="checkbox" id="cpreset_100" onchange="applyClicksPreset(this,100)" style="accent-color:#667eea;cursor:pointer"> 100 кликов
@@ -1059,7 +1059,7 @@ def new_test():
   }}
 
   function applyClicksPreset(cb, val) {{
-    [20,100,200].forEach(function(v) {{
+    [50,100,200].forEach(function(v) {{
       var el = document.getElementById('cpreset_' + v);
       var lbl = document.getElementById('cpreset_label_' + v);
       if (el && v !== val) el.checked = false;
@@ -1070,7 +1070,7 @@ def new_test():
   }}
 
   function clearClicksPresets() {{
-    [20,100,200].forEach(function(v) {{
+    [50,100,200].forEach(function(v) {{
       var el = document.getElementById('cpreset_' + v);
       var lbl = document.getElementById('cpreset_label_' + v);
       if (el) el.checked = false;
