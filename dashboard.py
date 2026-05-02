@@ -429,7 +429,7 @@ function addVariantWithUrl(url, hint, isFirst) {
     ? '<button type="button" onclick="removeVariant(this)" style="background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;font-size:1.2rem;padding:0;line-height:1">&times;</button>'
     : '';
   var previewHtml = url
-    ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='&#128247;'">'
+    ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=String.fromCodePoint(128247)">'
     : '<span style="font-size:2.5rem">&#128247;</span>';
   card.innerHTML =
     '<div style="background:' + headerBg + ';color:#fff;padding:.35rem .7rem;font-size:.82rem;font-weight:700;display:flex;justify-content:space-between;align-items:center">'
