@@ -335,11 +335,14 @@ def api_products():
     from flask import jsonify
     u = me()
     if not u:
+        print('[api/products] не авторизован')
         return jsonify([])
     keys = db.get_keys(u['id'])
     key  = next((k for k in keys if k['active']), None)
     if not key:
+        print(f'[api/products] нет активного ключа у user {u["id"]}, ключей: {len(keys)}')
         return jsonify([])
+    print(f'[api/products] запрос для user {u["id"]}, client_id={key["client_id"]}')
 
     hk = {'Client-Id': key['client_id'], 'Api-Key': key['api_key'], 'Content-Type': 'application/json'}
     all_items = []
@@ -352,6 +355,7 @@ def api_products():
                 json={'filter': {'visibility': 'IN_SALE'}, 'last_id': last_id, 'limit': 1000},
                 timeout=15)
             if r.status_code != 200:
+                print(f'[api/products] Ozon /v3/product/list статус {r.status_code}: {r.text[:200]}')
                 break
             result = r.json().get('result', {})
             items  = result.get('items', [])
@@ -396,6 +400,7 @@ def api_products():
 
         return jsonify(products)
     except Exception as e:
+        print(f'[api/products] исключение: {e}')
         return jsonify([])
 
 @api_bp.route('/api/debug-product')
