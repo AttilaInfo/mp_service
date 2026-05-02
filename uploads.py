@@ -1,49 +1,41 @@
 """
-uploads.py — безопасная загрузка и отдача изображений.
+uploads.py — загрузка фото через Telegraph (telegra.ph).
 
-Защиты:
-- Проверка magic bytes (реальный тип файла, не только Content-Type)
-- Ограничение размера каждого файла (5 MB)
-- Только UUID-имена файлов (никаких пользовательских имён)
-- Привязка файла к пользователю (папка per-user)
-- Защита от path traversal через werkzeug.secure_filename + re
-- Только изображения (JPEG, PNG, WebP, GIF)
-- Заголовки ответа: X-Content-Type-Options, Content-Security-Policy
+Фото загружаются на telegra.ph и возвращают публичный https:// URL
+который принимает API Озона для смены фото на карточке товара.
+
+Локальная копия также сохраняется в /data/uploads для отображения
+на сайте (быстрее чем внешний запрос).
 """
 
 import os
 import re
 import uuid
-import struct
+import requests as req
 
-from flask import Blueprint, request, jsonify, send_from_directory, abort
+from flask import Blueprint, request, jsonify, abort, make_response
+from flask import send_from_directory
 from auth import me
 
 uploads_bp = Blueprint('uploads', __name__)
 
-# ── Константы ─────────────────────────────────────────────────────────────────
-UPLOAD_DIR      = '/data/uploads'
-MAX_FILE_SIZE   = 10 * 1024 * 1024   # 10 МБ — лимит Ozon и Wildberries
-ALLOWED_MIMES   = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
+# ── Константы ──────────────────────────────────────────────────────────────
+UPLOAD_DIR    = '/data/uploads'
+MAX_FILE_SIZE = 10 * 1024 * 1024   # 10 МБ
+TELEGRAPH_URL = 'https://telegra.ph/upload'
 
-# Magic bytes для проверки реального типа файла
 MAGIC = {
-    b'\xff\xd8\xff':           ('jpg', 'image/jpeg'),   # JPEG
-    b'\x89PNG\r\n\x1a\n':     ('png', 'image/png'),     # PNG
-    b'RIFF':                   ('webp', 'image/webp'),  # WebP (проверяем дополнительно)
-    b'GIF87a':                 ('gif', 'image/gif'),
-    b'GIF89a':                 ('gif', 'image/gif'),
+    b'\xff\xd8\xff':       ('jpg',  'image/jpeg'),
+    b'\x89PNG\r\n\x1a\n': ('png',  'image/png'),
+    b'RIFF':               ('webp', 'image/webp'),
+    b'GIF87a':             ('gif',  'image/gif'),
+    b'GIF89a':             ('gif',  'image/gif'),
 }
 
 
 def _detect_image_type(data: bytes):
-    """
-    Определяет тип изображения по magic bytes.
-    Возвращает (ext, mime) или (None, None) если не изображение.
-    """
     for magic, info in MAGIC.items():
         if data[:len(magic)] == magic:
-            # Дополнительная проверка для WebP: байты 8-12 должны быть 'WEBP'
             if magic == b'RIFF':
                 if len(data) >= 12 and data[8:12] == b'WEBP':
                     return info
@@ -53,10 +45,6 @@ def _detect_image_type(data: bytes):
 
 
 def _safe_user_dir(user_id: int) -> str:
-    """
-    Возвращает путь к папке пользователя.
-    Только цифры в user_id — защита от path traversal.
-    """
     uid = re.sub(r'\D', '', str(user_id))
     if not uid:
         raise ValueError('Invalid user_id')
@@ -65,14 +53,35 @@ def _safe_user_dir(user_id: int) -> str:
     return path
 
 
-# ── Загрузка файла ─────────────────────────────────────────────────────────────
+def _upload_to_telegraph(data: bytes, ext: str) -> str | None:
+    """
+    Загружает байты изображения на telegra.ph.
+    Возвращает публичный URL вида https://telegra.ph/file/...
+    или None при ошибке.
+    """
+    mime_map = {'jpg': 'image/jpeg', 'png': 'image/png',
+                'webp': 'image/webp', 'gif': 'image/gif'}
+    mime = mime_map.get(ext, 'image/jpeg')
+    try:
+        r = req.post(
+            TELEGRAPH_URL,
+            files={'file': (f'photo.{ext}', data, mime)},
+            timeout=30
+        )
+        if r.status_code == 200:
+            result = r.json()
+            if isinstance(result, list) and result:
+                path = result[0].get('src', '')
+                if path:
+                    return 'https://telegra.ph' + path
+        return None
+    except Exception as e:
+        return None
+
+
+# ── Загрузка ───────────────────────────────────────────────────────────────
 @uploads_bp.route('/api/upload-photo', methods=['POST'])
 def upload_photo():
-    """
-    POST /api/upload-photo
-    Принимает multipart/form-data с полем 'photo'.
-    Возвращает JSON: {"url": "/uploads/USER_ID/UUID.ext"}
-    """
     u = me()
     if not u:
         return jsonify({'error': 'Необходима авторизация'}), 401
@@ -81,22 +90,20 @@ def upload_photo():
     if not f:
         return jsonify({'error': 'Файл не передан'}), 400
 
-    # 1. Читаем первые байты для проверки magic (не весь файл сразу)
     header = f.read(16)
     if len(header) < 4:
         return jsonify({'error': 'Файл слишком мал'}), 400
 
     ext, mime = _detect_image_type(header)
     if not ext:
-        return jsonify({'error': 'Допустимы только изображения: JPEG, PNG, WebP, GIF'}), 415
+        return jsonify({'error': 'Допустимы только JPEG, PNG, WebP, GIF'}), 415
 
-    # 2. Читаем остаток и проверяем размер
     f.seek(0)
     data = f.read(MAX_FILE_SIZE + 1)
     if len(data) > MAX_FILE_SIZE:
-        return jsonify({'error': f'Файл слишком большой (макс 10 МБ)'}), 413
+        return jsonify({'error': 'Файл слишком большой (макс 10 МБ)'}), 413
 
-    # 3. Сохраняем с UUID-именем в папку пользователя
+    # 1. Сохраняем локально (для отображения на сайте)
     try:
         user_dir = _safe_user_dir(u['id'])
     except ValueError:
@@ -104,22 +111,31 @@ def upload_photo():
 
     filename = f'{uuid.uuid4().hex}.{ext}'
     filepath = os.path.join(user_dir, filename)
-
     with open(filepath, 'wb') as out:
         out.write(data)
 
-    return jsonify({'url': f'/uploads/{u["id"]}/{filename}'})
+    # 2. Загружаем на Telegraph (для Озона — нужен публичный URL)
+    public_url = _upload_to_telegraph(data, ext)
+
+    if public_url:
+        # Возвращаем публичный URL — Озон сможет его принять
+        return jsonify({
+            'url':        public_url,
+            'local_url':  f'/uploads/{u["id"]}/{filename}',
+        })
+    else:
+        # Telegraph недоступен — возвращаем локальный URL
+        # Ротация не будет работать пока нет публичного URL
+        return jsonify({
+            'url':       f'/uploads/{u["id"]}/{filename}',
+            'local_url': f'/uploads/{u["id"]}/{filename}',
+            'warning':   'Фото сохранено локально. Ротация через Озон недоступна.',
+        })
 
 
-# ── Отдача файла ───────────────────────────────────────────────────────────────
+# ── Отдача локальных файлов ────────────────────────────────────────────────
 @uploads_bp.route('/uploads/<int:user_id>/<path:filename>')
 def serve_upload(user_id, filename):
-    """
-    GET /uploads/USER_ID/FILENAME
-    Отдаёт файл только если он существует в папке пользователя.
-    Защита от path traversal: filename не должен содержать / или ..
-    """
-    # Только буквы, цифры, дефис, точка — никаких слэшей и ..
     if not re.fullmatch(r'[a-f0-9]{32}\.(jpg|png|webp|gif)', filename):
         abort(404)
 
@@ -129,19 +145,13 @@ def serve_upload(user_id, filename):
     if not os.path.isfile(filepath):
         abort(404)
 
-    # Определяем MIME по magic bytes для корректного Content-Type
     with open(filepath, 'rb') as fh:
         header = fh.read(16)
     _, mime = _detect_image_type(header)
     if not mime:
         abort(415)
 
-    from flask import send_from_directory, make_response
     resp = make_response(send_from_directory(user_dir, filename, mimetype=mime))
-
-    # Заголовки безопасности
     resp.headers['X-Content-Type-Options'] = 'nosniff'
-    resp.headers['Content-Security-Policy'] = "default-src 'none'; img-src 'self'"
-    resp.headers['Cache-Control'] = 'public, max-age=86400'
-
+    resp.headers['Cache-Control']          = 'public, max-age=86400'
     return resp
