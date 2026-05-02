@@ -417,52 +417,171 @@ def test_detail(test_id):
     if not test:
         return redirect('/tests')
 
-    variants = db.get_variants(test_id)
+    variants = [dict(v) for v in db.get_variants(test_id)]
+    is_running = test['status'] == 'running'
 
-    status_badge = '<span class="bg g">&#9679; Активен</span>' if test['status'] == 'running' else '<span class="bg r">Завершён</span>'
+    # Считаем CTR для каждого варианта
+    for v in variants:
+        views  = v.get('views', 0) or 0
+        clicks = v.get('clicks', 0) or 0
+        v['ctr_calc'] = round(clicks / views * 100, 2) if views > 0 else 0.0
+
+    # Лидер по CTR
+    best_label = ''
+    if variants:
+        leader = max(variants, key=lambda v: v['ctr_calc'])
+        if leader['ctr_calc'] > 0:
+            best_label = leader['label']
+
+    # Итоговые цифры
+    total_views  = sum(v.get('views',  0) or 0 for v in variants)
+    total_clicks = sum(v.get('clicks', 0) or 0 for v in variants)
+    total_sales  = sum(v.get('sales',  0) or 0 for v in variants)
+    overall_ctr  = round(total_clicks / total_views * 100, 2) if total_views > 0 else 0.0
+    max_ctr      = max((v['ctr_calc'] for v in variants), default=0) or 1
+
+    # Шапка
+    status_badge = (
+        '<span style="background:#d4edda;color:#155724;border:1.5px solid #c3e6cb;'
+        'border-radius:20px;padding:.3rem .85rem;font-size:.82rem;font-weight:700;flex-shrink:0">&#9679; Активен</span>'
+        if is_running else
+        '<span style="background:#f8d7da;color:#721c24;border:1.5px solid #f5c6cb;'
+        'border-radius:20px;padding:.3rem .85rem;font-size:.82rem;font-weight:700;flex-shrink:0">&#9209; Завершён</span>'
+    )
 
     c = (
-        '<div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem">'
-        '<a href="/tests" class="btn" style="background:#f0f2f5;border:1px solid #ddd;color:#444">&#8592; Назад</a>'
-        '<p class="ttl" style="margin:0">' + test['product_name'] + '</p>'
-        + status_badge +
-        '</div>'
+        '<div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap">'
+        '<a href="/tests" class="btn" style="background:#f0f2f5;border:1px solid #ddd;color:#444;flex-shrink:0">&#8592; Назад</a>'
+        '<p class="ttl" style="margin:0;flex:1;min-width:0;font-size:1.1rem">' + test['product_name'] + '</p>'
+        + status_badge + '</div>'
     )
 
-    c += (
-        '<div class="box">'
-        '<table style="width:auto;margin-bottom:1rem">'
-        '<tr><td style="color:#666;padding:.4rem 2rem .4rem 0">SKU:</td><td><strong>' + test['sku'] + '</strong></td></tr>'
-        '<tr><td style="color:#666;padding:.4rem 2rem .4rem 0">Магазин:</td><td><strong>' + test['shop_name'] + '</strong></td></tr>'
-        '<tr><td style="color:#666;padding:.4rem 2rem .4rem 0">Стратегия:</td><td><strong>' + format_strategy(test['strategy']) + '</strong></td></tr>'
-        '<tr><td style="color:#666;padding:.4rem 2rem .4rem 0">Создан:</td><td><strong>' + str(test['created_at'])[:10] + '</strong></td></tr>'
-        '</table>'
-
-        '<h2 style="margin-bottom:1rem">Варианты фото (' + str(len(variants)) + ')</h2>'
-        '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem">'
-    )
-
-    for v in variants:
-        winner_style = 'border:3px solid #27ae60;' if test.get('winner') == v['label'] else ''
+    # Инфо-плашки
+    info_items = [
+        ('Вариантов',  str(len(variants)),              '&#127919;', '#667eea'),
+        ('Показов',    f'{total_views:,}'.replace(',', ' '), '&#128065;', '#2196f3'),
+        ('Кликов',     f'{total_clicks:,}'.replace(',', ' '), '&#128717;', '#27ae60'),
+        ('Продаж',     str(total_sales),                '&#128200;', '#ff9800'),
+        ('Общий CTR',  str(overall_ctr) + '%',          '&#128202;', '#9c27b0'),
+        ('Магазин',    test['shop_name'],                '&#127978;', '#607d8b'),
+        ('Стратегия',  format_strategy(test.get('strategy', '')), '&#9201;', '#455a64'),
+        ('Запущен',    str(test['created_at'])[:10],    '&#128197;', '#795548'),
+    ]
+    c += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:.6rem;margin-bottom:1.75rem">'
+    for lbl, val, icon, clr in info_items:
         c += (
-            '<div style="background:#f8f9fa;border-radius:12px;padding:1rem;text-align:center;' + winner_style + '">'
-            '<div style="font-size:2rem;font-weight:700;color:#667eea">&#127919; ' + v['label'] + '</div>'
-            '<div style="font-size:.8rem;color:#888;margin:.5rem 0;word-break:break-all">' + v['photo_url'][:50] + '...</div>'
-            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:.3rem;font-size:.82rem;margin-top:.5rem">'
-            '<div style="background:#e8f4fd;padding:.3rem;border-radius:4px">&#128065; ' + str(v['views']) + '</div>'
-            '<div style="background:#d4edda;padding:.3rem;border-radius:4px">&#128717; ' + str(v['clicks']) + '</div>'
-            '</div>'
-            + ('<div style="margin-top:.5rem;color:#27ae60;font-weight:700">&#127942; Победитель!</div>' if test.get('winner') == v['label'] else '') +
+            '<div style="background:#fff;border:1.5px solid #eee;border-radius:10px;padding:.7rem .85rem">'
+            '<div style="font-size:.7rem;color:#aaa;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.25rem">' + lbl + '</div>'
+            '<div style="font-size:.95rem;font-weight:700;color:' + clr + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + str(val) + '">'
+            + icon + ' ' + str(val) + '</div>'
             '</div>'
         )
+    c += '</div>'
 
-    c += '</div></div>'
+    # Карточки вариантов
+    c += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:1rem;margin-bottom:1.5rem">'
+    for v in variants:
+        views      = v.get('views', 0) or 0
+        clicks     = v.get('clicks', 0) or 0
+        sales      = v.get('sales', 0) or 0
+        conversion = v.get('conversion', 0) or 0
+        ctr        = v['ctr_calc']
+        is_winner  = (v['label'] == best_label and ctr > 0)
+        is_current = (v['label'] == 'A')
+        bar_w      = int(ctr / max_ctr * 100) if max_ctr > 0 else 0
 
-    if test['status'] == 'running':
+        # Цвет акцента карточки
+        if is_winner and not is_running:
+            accent = '#27ae60'; border = '2.5px solid #27ae60'
+            hdr_bg = 'linear-gradient(135deg,#27ae60,#2ecc71)'; hdr_clr = '#fff'
+        elif is_winner:
+            accent = '#667eea'; border = '2.5px solid #667eea'
+            hdr_bg = 'linear-gradient(135deg,#667eea,#764ba2)'; hdr_clr = '#fff'
+        elif is_current:
+            accent = '#e91e8c'; border = '1.5px solid #f8bbd0'
+            hdr_bg = 'linear-gradient(135deg,#f093fb,#f5576c)'; hdr_clr = '#fff'
+        else:
+            accent = '#667eea'; border = '1.5px solid #e8e8e8'
+            hdr_bg = '#f5f5f5'; hdr_clr = '#555'
+
+        # Фото
+        photo_url = v.get('photo_url', '')
+        if photo_url.startswith('/uploads/') or photo_url.startswith('http'):
+            img_html = '<img src="' + photo_url + '" style="width:100%;height:100%;object-fit:cover" loading="lazy">'
+        else:
+            img_html = '<div style="font-size:2rem;color:#ccc">&#128247;</div>'
+
+        # Бейджи
+        badges = ''
+        if is_winner and not is_running:
+            badges += '<div style="position:absolute;top:.45rem;right:.45rem;background:#27ae60;color:#fff;border-radius:20px;padding:.15rem .55rem;font-size:.7rem;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.15)">&#127942; Победитель</div>'
+        elif is_winner:
+            badges += '<div style="position:absolute;top:.45rem;right:.45rem;background:#667eea;color:#fff;border-radius:20px;padding:.15rem .55rem;font-size:.7rem;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.15)">&#128200; Лидер</div>'
+        if is_current:
+            badges += '<div style="position:absolute;bottom:.45rem;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#fff;border-radius:20px;padding:.15rem .6rem;font-size:.68rem;font-weight:700;white-space:nowrap">Сейчас на Озоне</div>'
+
+        # Метрики
+        def mrow(icon, lbl, val):
+            return (
+                '<div style="background:#f8f9fa;border-radius:6px;padding:.3rem .5rem;display:flex;justify-content:space-between;align-items:center">'
+                '<span style="color:#aaa;font-size:.78rem">' + icon + ' ' + lbl + '</span>'
+                '<strong style="font-size:.82rem;color:#333">' + str(val) + '</strong>'
+                '</div>'
+            )
+
         c += (
-            '<form method="POST" action="/tests/' + str(test_id) + '/stop">'
-            '<button class="btn bd" onclick="return confirm(\'Завершить тест?\')">&#9209; Завершить тест</button>'
+            '<div style="background:#fff;border:' + border + ';border-radius:14px;overflow:hidden;'
+            'box-shadow:0 2px 10px rgba(0,0,0,.05)">'
+
+            # Заголовок
+            + '<div style="background:' + hdr_bg + ';color:' + hdr_clr + ';padding:.4rem .8rem;'
+            'display:flex;justify-content:space-between;align-items:center;font-size:.85rem;font-weight:700">'
+            + '<span>Вариант ' + v['label'] + '</span>'
+            + ('</div>' )
+
+            # Фото 3:4
+            + '<div style="width:100%;aspect-ratio:3/4;background:#f0f0f0;overflow:hidden;'
+            'display:flex;align-items:center;justify-content:center;position:relative">'
+            + badges + img_html + '</div>'
+
+            # CTR + bar
+            + '<div style="padding:.65rem .8rem .55rem">'
+            + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.3rem">'
+            + '<span style="font-size:.7rem;color:#aaa;font-weight:700;text-transform:uppercase;letter-spacing:.05em">CTR</span>'
+            + '<span style="font-size:1.45rem;font-weight:800;color:' + accent + '">' + str(ctr) + '%</span>'
+            + '</div>'
+            + '<div style="background:#f0f2f5;border-radius:99px;height:4px;margin-bottom:.6rem">'
+            + '<div style="height:100%;border-radius:99px;background:' + accent + ';width:' + str(bar_w) + '%;transition:width .4s ease"></div>'
+            + '</div>'
+
+            # Метрики
+            + '<div style="display:flex;flex-direction:column;gap:.25rem">'
+            + mrow('&#128065;', 'Показы',    f'{views:,}'.replace(',', ' '))
+            + mrow('&#128717;', 'Клики',     clicks)
+            + mrow('&#128200;', 'Продажи',   sales)
+            + mrow('&#128260;', 'Конверсия', str(round(conversion * 100, 1)) + '%')
+            + '</div>'
+            + '</div>'  # end padding
+            + '</div>'  # end card
+        )
+
+    c += '</div>'
+
+    # Кнопка завершения
+    if is_running:
+        c += (
+            '<div style="background:#fff8e1;border:1.5px solid #ffe082;border-radius:12px;'
+            'padding:.85rem 1.2rem;display:flex;align-items:center;justify-content:space-between;'
+            'flex-wrap:wrap;gap:.75rem">'
+            '<span style="font-size:.88rem;color:#5d4037">'
+            '&#128161; Тест активен. Победитель — вариант с максимальным CTR.</span>'
+            '<form method="POST" action="/tests/' + str(test_id) + '/stop" style="margin:0">'
+            '<button class="btn" style="background:#e74c3c;color:#fff;border:none;padding:.55rem 1.3rem;'
+            'font-weight:700;border-radius:8px" '
+            'onclick="return confirm(\'Завершить тест и зафиксировать результаты?\')">'
+            '&#9209; Завершить тест</button>'
             '</form>'
+            '</div>'
         )
 
     return render(c, 'tests')
