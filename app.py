@@ -2,7 +2,6 @@ import os
 from flask import Flask
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-
 from config import SECRET_KEY, DATABASE_URL
 import database as db
 
@@ -10,12 +9,14 @@ from landing   import landing_bp
 from auth      import auth_bp
 from dashboard import dashboard_bp
 from api_keys  import api_keys_bp
-from uploads import uploads_bp
-
-app.register_blueprint(uploads_bp)
+from analytics import analytics_bp
+from api       import api_bp
+from tests     import tests_bp
+from uploads   import uploads_bp
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10 МБ — лимит Ozon и Wildberries
 
 limiter = Limiter(
     app=app,
@@ -28,6 +29,10 @@ app.register_blueprint(landing_bp)
 app.register_blueprint(auth_bp)
 app.register_blueprint(dashboard_bp)
 app.register_blueprint(api_keys_bp)
+app.register_blueprint(analytics_bp)
+app.register_blueprint(api_bp)
+app.register_blueprint(tests_bp)
+app.register_blueprint(uploads_bp)
 
 # Создаём таблицы при старте
 if DATABASE_URL:
