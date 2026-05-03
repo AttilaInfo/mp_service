@@ -77,7 +77,12 @@ def new_test():
     keys = db.get_keys(u['id'])
     active_keys = [k for k in keys if k['active']]
     if not active_keys:
-        return redirect('/tests')
+        return redirect('/tests?err=Сначала+добавьте+API+ключ+Озона')
+
+    # Проверка Performance API
+    perf_key = db.get_perf_key(u['id'])
+    if not perf_key:
+        return redirect('/tests?err=Для+создания+теста+нужен+Performance+API.+Добавьте+его+в+разделе+API+ключи')
 
     err = request.args.get('err', '')
     shops_opts = ''.join(
@@ -132,7 +137,7 @@ def new_test():
     <p style="font-size:.85rem;color:#666;margin:.6rem 0 1rem">
       Выберите рекламную кампанию Озона в которой участвует этот товар.
       Статистика CTR будет считаться из неё.<br>
-      <strong>Рекомендуем:</strong> создайте отдельную кампанию «1 товар» специально для теста.
+      <strong>Рекомендуем:</strong> один товар в одной рекламной кампании.
     </p>
     <div id="camp_status" style="margin-bottom:.8rem">
       <span style="color:#aaa;font-size:.9rem" id="camp_loading">&#128260; Загрузка кампаний...</span>
@@ -151,8 +156,6 @@ def new_test():
     <a href="/api-keys" style="color:#1e40af;font-weight:600">Подключите его в разделе API ключи</a> и вернитесь.</p>
   </div>
 
-  <button class="btn bp" style="width:100%" id="submit_btn" disabled>&#129514; Запустить тест</button>
-  <p id="submit_hint" style="text-align:center;font-size:.82rem;color:#e74c3c;margin-top:.5rem">Выберите рекламную кампанию чтобы запустить тест</p>
 </form>
 
 <script>
