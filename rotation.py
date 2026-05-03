@@ -311,7 +311,7 @@ def weakest_variant(variants):
 
 
 
-def _collect_variant_stats(conn, test, key, variant, all_variants):
+def _collect_variant_stats(conn, test, key, variant, all_variants, product_id=None):
     """Запрашивает статистику из Озона за период активности варианта."""
     activated_at = variant.get('activated_at')
     # Если activated_at пустой — используем дату создания теста как запасной вариант
@@ -348,15 +348,17 @@ def _collect_variant_stats(conn, test, key, variant, all_variants):
         if r.status_code == 200:
             rows = r.json().get('result', {}).get('data', [])
             if rows:
-                # Ищем строку с нашим SKU (dimension=offer_id)
-                sku = test['sku']
-                row = next(
-                    (r for r in rows
-                     if (r.get('dimensions') or [{}])[0].get('id') == sku),
-                    None
-                )
+                # Ищем строку по product_id Озона
+                pid = str(product_id) if product_id else None
+                row = None
+                if pid:
+                    row = next(
+                        (r for r in rows
+                         if (r.get('dimensions') or [{}])[0].get('id') == pid),
+                        None
+                    )
                 if not row:
-                    log.warning(f'  SKU {sku} не найден в аналитике, примеры: {[(r.get("dimensions") or [{}])[0].get("id") for r in rows[:3]]}')
+                    log.warning(f'  product_id {pid} не найден, примеры: {[(r.get("dimensions") or [{}])[0].get("id") for r in rows[:3]]}')
                     return
                 m      = row.get('metrics', [0, 0])
                 views  = int(m[0]) if len(m) > 0 else 0
@@ -432,7 +434,9 @@ def process_test(conn, test, key):
 
     # 4.5. Всегда обновляем статистику текущего варианта
     time.sleep(1)
-    _collect_variant_stats(conn, test, key, cur_variant, variants)
+    _prod_info = get_product_info(key, test['sku'])
+    _prod_id   = (_prod_info.get('id') or _prod_info.get('product_id')) if _prod_info else None
+    _collect_variant_stats(conn, test, key, cur_variant, variants, product_id=_prod_id)
 
     # 5. Проверяем нужна ли ротация
     if not should_rotate(dict(test), cur_variant, strategy):
@@ -465,7 +469,7 @@ def process_test(conn, test, key):
         conn.commit()
         log.info(f'  Ротация применена: {cur_lbl} → {nxt["label"]}')
         # Собираем статистику деактивируемого варианта
-        _collect_variant_stats(conn, test, key, cur_variant, variants)
+        _collect_variant_stats(conn, test, key, cur_variant, variants, product_id=_prod_id)
         # Записываем время активации нового варианта
         try:
             import database as db_local
