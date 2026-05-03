@@ -159,9 +159,7 @@ def new_test():
       &#128640; Рекламная кампания <span style="font-weight:400;font-size:.82rem;color:#888">(обязательно для точного CTR)</span>
     </label>
     <p style="font-size:.85rem;color:#666;margin:.6rem 0 1rem">
-      Выберите рекламную кампанию Озона в которой участвует этот товар.
-      Статистика CTR будет считаться из неё.<br>
-      <strong>Рекомендуем:</strong> один товар в одной рекламной кампании.
+      <span id="camp_desc_text">Загрузка кампаний...</span>
     </p>
     <div id="camp_status" style="margin-bottom:.8rem">
       <span style="color:#aaa;font-size:.9rem" id="camp_loading">&#128260; Загрузка кампаний...</span>
@@ -760,11 +758,16 @@ def test_detail(test_id):
             c += 'fetch("/api/perf-campaigns?sku=' + camp_sku + '").then(function(r){return r.json();}).then(function(data){'
             c += '  var el=document.getElementById("camp_list");'
             c += '  var sel=' + sel_json + ';'
-            c += '  if(!data.campaigns||!data.campaigns.length){el.innerHTML="<span style=\\"color:#999\\">Нет активных кампаний</span>";return;}'
+            c += '  if(!data.campaigns||!data.campaigns.length){'
+            c += '    el.innerHTML="<div style=\\\\\"background:#fff3cd;border-radius:8px;padding:.8rem;font-size:.88rem\\\\\">&#9888; Создайте рекламную кампанию в Озоне: Продвижение &rarr; Реклама &rarr; Оплата за клик. Добавьте этот товар и нажмите Обновить список.</div>";'
+            c += '    document.getElementById(\\"camp_desc_text\\").textContent=\\"Рекламных кампаний с этим товаром пока нет. Создайте кампанию и нажмите Обновить список.\\";'
+            c += '    return;}'
             c += '  var html="";data.campaigns.forEach(function(camp){'
             c += '    var chk=sel.indexOf(camp.id)>=0?"checked":"";'
             c += '    html+="<label style=\\"display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;cursor:pointer\\"><input type=\\"checkbox\\" value=\\""+camp.id+"\\" "+chk+" onchange=\\"updC()\\" style=\\"accent-color:#667eea\\"> "+camp.name+" <span style=\\"color:#aaa;font-size:.78rem\\">(ID: "+camp.id+")</span></label>";'
-            c += '  });el.innerHTML=html;});'
+            c += '  });el.innerHTML=html;'
+            c += '  document.getElementById(\\"camp_desc_text\\").textContent=\\"Выберите кампанию — CTR будет считаться из неё. Рекомендуем: один товар в одной кампании.\\";'
+            c += '});'
             c += 'function updC(){var ids=[];document.querySelectorAll("#camp_list input:checked").forEach(function(x){ids.push(x.value);});document.getElementById("camp_ids_input").value=ids.join(",");}'
             c += '</script>'
             c += '</div>'
