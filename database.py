@@ -74,6 +74,11 @@ def init_db():
             # Добавляем колонки если их ещё нет (для существующих БД)
             cur.execute("ALTER TABLE test_variants ADD COLUMN IF NOT EXISTS paused BOOLEAN DEFAULT FALSE")
             cur.execute("ALTER TABLE tests ADD COLUMN IF NOT EXISTS strategy TEXT DEFAULT 'time:30m'")
+            cur.execute("ALTER TABLE test_variants ADD COLUMN IF NOT EXISTS activated_at TIMESTAMP DEFAULT NOW()")
+            cur.execute("ALTER TABLE test_variants ADD COLUMN IF NOT EXISTS deactivated_at TIMESTAMP DEFAULT NULL")
+            cur.execute("ALTER TABLE test_variants ADD COLUMN IF NOT EXISTS views INTEGER DEFAULT 0")
+            cur.execute("ALTER TABLE test_variants ADD COLUMN IF NOT EXISTS clicks INTEGER DEFAULT 0")
+            cur.execute("ALTER TABLE test_variants ADD COLUMN IF NOT EXISTS tocart INTEGER DEFAULT 0")
 
         conn.commit()
     print('БД инициализирована успешно')
@@ -280,4 +285,39 @@ def update_test_strategy(test_id, user_id, strategy):
                 "UPDATE tests SET strategy=%s WHERE id=%s AND user_id=%s AND status='running'",
                 (strategy, test_id, user_id)
             )
+        conn.commit()
+
+
+def activate_variant(test_id, label):
+    """Отмечает вариант как активный (сохраняет время активации)."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            # Деактивируем предыдущий активный вариант
+            cur.execute("""
+                UPDATE test_variants
+                SET deactivated_at = NOW()
+                WHERE test_id = %s AND deactivated_at IS NULL AND label != %s
+            """, (test_id, label))
+            # Активируем новый
+            cur.execute("""
+                UPDATE test_variants
+                SET activated_at = NOW(), deactivated_at = NULL
+                WHERE test_id = %s AND label = %s
+            """, (test_id, label))
+        conn.commit()
+
+
+def update_variant_stats(variant_id, views, clicks, tocart):
+    """Обновляет накопленную статистику варианта."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            ctr = round(clicks / views * 100, 2) if views > 0 else 0.0
+            cur.execute("""
+                UPDATE test_variants
+                SET views = views + %s,
+                    clicks = clicks + %s,
+                    tocart = tocart + %s,
+                    ctr = %s
+                WHERE id = %s
+            """, (views, clicks, tocart, ctr, variant_id))
         conn.commit()
