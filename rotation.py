@@ -413,6 +413,10 @@ def process_test(conn, test, key):
     # 4. Находим текущий вариант
     cur_variant = next((v for v in variants if v['label'] == cur_lbl), variants[0])
 
+    # 4.5. Всегда обновляем статистику текущего варианта
+    time.sleep(1)
+    _collect_variant_stats(conn, test, key, cur_variant, variants)
+
     # 5. Проверяем нужна ли ротация
     if not should_rotate(dict(test), cur_variant, strategy):
         log.info(f'  Ротация не нужна (текущий: {cur_lbl})')
