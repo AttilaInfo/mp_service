@@ -61,7 +61,7 @@ def api_keys():
                   '<button class="btn bs" style="font-size:.8rem;padding:.3rem .7rem;background:#e8f4fd;color:#1e40af;border:1px solid #bfdbfe" title="Перепроверить">&#128260;</button>'
                   '</form>'
                   '<form method="POST" action="/api-keys/del/' + str(k['id']) + '">'
-                  '<button class="btn bd bs" style="font-size:.8rem;padding:.3rem .7rem" onclick="showConfirm(this.closest(&apos;form&apos;), &apos;Удалить подключение?&apos;, &apos;Это действие нельзя отменить.&apos;);return false;" title="Удалить">&#10005;</button>'
+                  '<button class="btn bd bs" style="font-size:.8rem;padding:.3rem .7rem" onclick="showConfirm(this.closest(&apos;form&apos;),&apos;Удалить подключение?&apos;,&apos;Это действие нельзя отменить.&apos;);return false;" title="Удалить">&#10005;</button>'
                   '</form>'
                   '</div></div>')
             c += '</div>'
@@ -82,7 +82,7 @@ def api_keys():
                       '</div>'
                       '<form method="POST" action="/api-keys/perf/del/' + str(pk['id']) + '">'
                       '<button class="btn bd bs" style="font-size:.8rem;padding:.3rem .7rem" '
-                      'onclick="showConfirm(this.closest(&apos;form&apos;), &apos;Удалить Performance API?&apos;, &apos;CTR по рекламным кампаниям перестанет собираться.&apos;);return false;" title="Удалить">&#10005;</button>'
+                      'onclick="showConfirm(this.closest(&apos;form&apos;),&apos;Удалить Performance API?&apos;,&apos;CTR по рекламным кампаниям перестанет собираться.&apos;);return false;" title="Удалить">&#10005;</button>'
                       '</form>'
                       '</div></div>')
         else:
@@ -133,7 +133,7 @@ def api_keys():
             '<input type="password" id="akey_field" name="akey" class="fi" '
             'placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" required maxlength="200">'
             '</div>'
-            '<button class="btn bp">Проверить и сохранить</button>'
+            '<button class="btn bp" onclick="this.disabled=true;this.innerHTML=\'&#9203; Проверка...\';">Проверить и сохранить</button>'
             '</form>'
         )
     else:
@@ -159,7 +159,7 @@ def api_keys():
         '<input type="password" name="perf_client_secret" class="fi" '
         'placeholder="Ваш Client Secret" required maxlength="300">'
         '<div class="hn">Хранится безопасно</div></div>'
-        '<button class="btn bp">Сохранить Performance API ключ</button>'
+        '<button class="btn bp" onclick="this.disabled=true;this.innerHTML=\'&#9203; Подключение...\';">Сохранить Performance API ключ</button>'
         '</form>'
     )
     c += '</div>'
@@ -171,10 +171,10 @@ def api_keys():
            '<p style="font-weight:700;font-size:1.1rem;color:#1a1a2e;margin:0 0 .4rem" id="cm_t"></p>'
            '<p style="font-size:.9rem;color:#888;margin:0 0 1.75rem;line-height:1.5" id="cm_s"></p>'
            '<div style="display:flex;gap:.75rem">'
-           '<button onclick="closeCM()" style="flex:1;background:#f7f8fa;border:1.5px solid #e2e8f0;color:#555;border-radius:10px;padding:.6rem 1rem;cursor:pointer;font-size:.9rem;font-weight:500;transition:background .15s">Отмена</button>'
+           '<button onclick="closeCM()" style="flex:1;background:#f7f8fa;border:1.5px solid #e2e8f0;color:#555;border-radius:10px;padding:.6rem 1rem;cursor:pointer;font-size:.9rem;font-weight:500">Отмена</button>'
            '<button id="cm_ok" style="flex:1;background:linear-gradient(135deg,#e53e3e,#c53030);color:#fff;border:none;border-radius:10px;padding:.6rem 1rem;font-weight:600;cursor:pointer;font-size:.9rem;box-shadow:0 4px 12px rgba(229,62,62,.35)">Удалить</button>'
            '</div></div></div>'
-           '<style>#cm>div{animation:cmIn .2s cubic-bezier(.34,1.56,.64,1)}@keyframes cmIn{from{opacity:0;transform:scale(.88) translateY(12px)}to{opacity:1;transform:scale(1) translateY(0)}}#cm button:hover{opacity:.88}</style>'
+           '<style>#cm>div{animation:cmIn .2s cubic-bezier(.34,1.56,.64,1)}@keyframes cmIn{from{opacity:0;transform:scale(.88)}to{opacity:1;transform:scale(1)}}</style>'
            '<script>'
            'var _cmf=null;'
            'function showConfirm(f,t,s){'
@@ -186,7 +186,7 @@ def api_keys():
            'document.addEventListener("DOMContentLoaded",function(){'
            'var ok=document.getElementById("cm_ok");'
            'var cm=document.getElementById("cm");'
-           'if(ok)ok.onclick=function(){if(_cmf){closeCM();_cmf.submit();}};'
+           'if(ok)ok.addEventListener("click",function(){if(_cmf){var f=_cmf;closeCM();f.submit();}});'
            'if(cm)cm.addEventListener("click",function(e){if(e.target===this)closeCM();});'
            '});'
            'document.addEventListener("keydown",function(e){if(e.key==="Escape")closeCM();});'
