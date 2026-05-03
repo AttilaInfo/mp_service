@@ -79,6 +79,18 @@ def init_db():
             cur.execute("ALTER TABLE test_variants ADD COLUMN IF NOT EXISTS views INTEGER DEFAULT 0")
             cur.execute("ALTER TABLE test_variants ADD COLUMN IF NOT EXISTS clicks INTEGER DEFAULT 0")
             cur.execute("ALTER TABLE test_variants ADD COLUMN IF NOT EXISTS tocart INTEGER DEFAULT 0")
+            # Performance API ключи
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS perf_keys (
+                    id          SERIAL PRIMARY KEY,
+                    user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                    client_id   TEXT NOT NULL,
+                    client_secret TEXT NOT NULL,
+                    added_at    TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            # campaign_ids для тестов
+            cur.execute("ALTER TABLE tests ADD COLUMN IF NOT EXISTS campaign_ids TEXT DEFAULT ''")
 
         conn.commit()
     print('БД инициализирована успешно')
@@ -320,4 +332,47 @@ def update_variant_stats(variant_id, views, clicks, tocart):
                     ctr = %s
                 WHERE id = %s
             """, (views, clicks, tocart, ctr, variant_id))
+        conn.commit()
+
+
+# ── Performance API ────────────────────────────────────────────────────────
+
+def get_perf_key(user_id):
+    """Получить Performance API ключ пользователя."""
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT * FROM perf_keys WHERE user_id=%s ORDER BY added_at DESC LIMIT 1",
+                (user_id,)
+            )
+            return cur.fetchone()
+
+
+def save_perf_key(user_id, client_id, client_secret):
+    """Сохранить (или обновить) Performance API ключ."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM perf_keys WHERE user_id=%s", (user_id,))
+            cur.execute(
+                "INSERT INTO perf_keys (user_id, client_id, client_secret) VALUES (%s,%s,%s)",
+                (user_id, client_id, client_secret)
+            )
+        conn.commit()
+
+
+def delete_perf_key(user_id):
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM perf_keys WHERE user_id=%s", (user_id,))
+        conn.commit()
+
+
+def update_test_campaigns(test_id, user_id, campaign_ids):
+    """Сохраняет список ID рекламных кампаний для теста (через запятую)."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE tests SET campaign_ids=%s WHERE id=%s AND user_id=%s",
+                (campaign_ids, test_id, user_id)
+            )
         conn.commit()
