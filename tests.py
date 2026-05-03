@@ -31,17 +31,33 @@ def tests():
         c += '<a href="/api-keys" class="btn" style="background:#fff3cd;border:1px solid #ffc107;color:#856404">&#128640; Подключить Performance API</a>'
     c += '</div>'
 
-    if not active_key:
-        c += alert('Сначала добавьте API ключ Озона чтобы создавать тесты. <a href="/api-keys" style="font-weight:700">Добавить</a>', 'wn')
-
     perf_key = db.get_perf_key(u['id'])
-    if active_key and not perf_key:
-        c += ('<div style="background:#fff3cd;border:1px solid #ffe082;border-radius:12px;padding:1.2rem 1.5rem;margin-bottom:1.5rem;display:flex;justify-content:space-between;align-items:center;gap:1rem">'
-               '<div>'
-               '<p style="font-weight:700;color:#856404;margin-bottom:.3rem">&#128640; Для создания тестов нужен Performance API</p>'
-               '<p style="font-size:.9rem;color:#666">Подключите Performance API Озона — он нужен для получения точного CTR по рекламным кампаниям.</p>'
+    has_seller_api = bool(active_key)
+    has_perf_api   = bool(perf_key)
+
+    if not has_seller_api or not has_perf_api:
+        c += ('<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:14px;padding:1.5rem;margin-bottom:1.5rem">'
+               '<p style="font-weight:700;color:#856404;font-size:1.05rem;margin-bottom:1rem">'
+               '&#9888; Для создания A/B тестов нужно подключить два API</p>'
+               '<div style="display:flex;flex-direction:column;gap:.75rem">'
+               '<div style="display:flex;align-items:center;gap:.75rem;background:' + ('#d4edda' if has_seller_api else '#f8d7da') + ';border-radius:10px;padding:.75rem 1rem">'
+               '<span style="font-size:1.3rem">' + ('&#10003;' if has_seller_api else '&#10005;') + '</span>'
+               '<div style="flex:1">'
+               '<div style="font-weight:600">Seller API Озона</div>'
+               '<div style="font-size:.85rem;color:#555">Нужен для управления фото товаров</div>'
                '</div>'
-               '<a href="/api-keys" class="btn bp" style="white-space:nowrap">Подключить →</a>'
+               + ('' if has_seller_api else '<a href="/api-keys" class="btn bp" style="white-space:nowrap;font-size:.85rem;padding:.4rem .9rem">Подключить</a>') +
+               '</div>'
+               '<div style="display:flex;align-items:center;gap:.75rem;background:' + ('#d4edda' if has_perf_api else '#f8d7da') + ';border-radius:10px;padding:.75rem 1rem">'
+               '<span style="font-size:1.3rem">' + ('&#10003;' if has_perf_api else '&#10005;') + '</span>'
+               '<div style="flex:1">'
+               '<div style="font-weight:600">Performance API Озона &#128640;</div>'
+               '<div style="font-size:.85rem;color:#555">Нужен для точного CTR через рекламные кампании</div>'
+               '</div>'
+               + ('' if has_perf_api else '<a href="/api-keys" class="btn bp" style="white-space:nowrap;font-size:.85rem;padding:.4rem .9rem">Подключить</a>') +
+               '</div>'
+               '</div>'
+               + ('<p style="font-size:.85rem;color:#666;margin-top:1rem">Когда оба API подключены — кнопка «Создать тест» появится автоматически.</p>' if not (has_seller_api and has_perf_api) else '') +
                '</div>')
 
     if user_tests:
