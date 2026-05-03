@@ -336,22 +336,23 @@ def _collect_variant_stats(conn, test, key, variant, all_variants):
             f'{OZON_API_URL}/v1/analytics/data',
             headers=ozon_headers(key),
             json={
-                'date_from': date_from, 'date_to': date_to,
+                'date_from': date_from,
+                'date_to':   date_to,
                 'metrics':   ['hits_view_pdp', 'hits_tocart', 'hits_view'],
-                'dimension': ['offer_id'],
+                'dimension': ['day'],
                 'filters':   [{'key': 'offer_id', 'op': 'EQ', 'value': test['sku']}],
-                'limit': 1,
+                'limit':     31,
             },
-            timeout=15
+            timeout=20
         )
         log.info(f'  analytics status={r.status_code} body={r.text[:200]}')
         if r.status_code == 200:
             rows = r.json().get('result', {}).get('data', [])
             if rows:
-                m      = rows[0].get('metrics', [0, 0, 0])
-                views  = int(m[0]) if len(m) > 0 else 0
-                tocart = int(m[1]) if len(m) > 1 else 0
-                clicks = int(m[2]) if len(m) > 2 else 0
+                # Суммируем по всем дням периода
+                views  = sum(int(row.get('metrics', [0])[0]) for row in rows if row.get('metrics'))
+                tocart = sum(int(row.get('metrics', [0,0])[1]) for row in rows if len(row.get('metrics',[]))>1)
+                clicks = sum(int(row.get('metrics', [0,0,0])[2]) for row in rows if len(row.get('metrics',[]))>2)
                 n      = max(1, len([v for v in all_variants if not v.get('paused')]))
                 views_v  = views  // n
                 tocart_v = tocart // n
