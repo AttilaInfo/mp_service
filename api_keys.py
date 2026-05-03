@@ -152,6 +152,34 @@ def api_keys():
     return render(c, 'keys')
 
 
+
+@api_keys_bp.route('/api-keys/add', methods=['POST'])
+def add_key():
+    u = me()
+    if not u:
+        return redirect('/login')
+
+    if db.count_keys(u['id']) >= MAX_API_KEYS:
+        return redirect('/api-keys?err=Достигнут+лимит+ключей')
+
+    shop = clean(request.form.get('shop', ''), 100)
+    cid  = clean(request.form.get('cid',  ''), 50)
+    akey = request.form.get('akey', '').strip()
+
+    if not shop or not cid or not akey:
+        return redirect(f'/api-keys?err=Заполните+все+поля&shop={shop}&cid={cid}')
+    if not cid.isdigit():
+        return redirect(f'/api-keys?err=Client+ID+должен+быть+числом&shop={shop}&cid={cid}')
+    if len(akey) < 10:
+        return redirect(f'/api-keys?err=API+Key+слишком+короткий&shop={shop}&cid={cid}')
+
+    ok, msg = verify_ozon(cid, akey)
+    db.add_key(u['id'], shop, cid, akey, akey[-4:], ok, msg)
+
+    if ok:
+        return redirect('/api-keys?msg=Магазин+' + shop + '+успешно+подключён')
+    return redirect('/api-keys?err=Ключ+добавлен+но+проверка:+' + msg.replace(' ', '+'))
+
 @api_keys_bp.route('/api-keys/recheck/<int:key_id>', methods=['POST'])
 def recheck_key(key_id):
     u = me()
