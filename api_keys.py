@@ -76,43 +76,6 @@ def api_keys():
 
     c += '</div>'
 
-    # ── Список ключей ──────────────────────────────────────────────────────
-    c += f'<div class="box"><h2>Ваши подключения ({cnt} / {MAX_API_KEYS})</h2>'
-
-    if keys:
-        for k in keys:
-            dot   = 'dg' if k['active'] else 'dr'
-            badge = '<span class="bg g">Активен</span>' if k['active'] else '<span class="bg r">Ошибка</span>'
-            c += (
-                '<div class="kc"><div style="flex:1">'
-                '<div class="kn">' + k['shop_name'] + '</div>'
-                '<span class="ki">Client ID: ' + k['client_id'] + '</span>'
-                '<span class="ki">API Key: ....' + k['hint'] + '</span>'
-            )
-            if k.get('check_msg'):
-                c += '<div style="font-size:.8rem;color:#666;margin-top:.3rem">' + k['check_msg'] + '</div>'
-            added = str(k['added_at'])[:10] if k.get('added_at') else '-'
-            c += (
-                '<div style="font-size:.8rem;color:#999;margin-top:.2rem">Добавлен: ' + added + '</div>'
-                '</div>'
-                '<div style="display:flex;align-items:center;gap:.5rem">'
-                '<span class="dot ' + dot + '"></span>' + badge +
-                '</div>'
-                '<div style="display:flex;gap:.5rem">'
-                
-                '<form method="POST" action="/api-keys/recheck/' + str(k['id']) + '">'
-                '<button class="btn bs" style="background:#e8f4fd;color:#1e40af;border:1px solid #bfdbfe">&#128260; Перепроверить</button>'
-                '</form>'
-                '<form method="POST" action="/api-keys/del/' + str(k['id']) + '">'
-                '<button class="btn bd bs" onclick="return confirm(\'Удалить?\')">Удалить</button>'
-                '</form></div></div>'
-            )
-    else:
-        c += '<div class="empty"><p style="font-size:2rem">&#128273;</p><p style="margin-top:1rem">Нет добавленных ключей</p></div>'
-
-    c += '</div>'
-
-
     # ── Performance API ────────────────────────────────────────────────────
     perf = db.get_perf_key(u['id'])
     c += '<div class="box"><h2>&#128640; Performance API (для точного CTR)</h2>'
@@ -149,6 +112,43 @@ def api_keys():
             '</form>'
         )
     c += '</div>'
+
+    # ── Список ключей ──────────────────────────────────────────────────────
+    c += f'<div class="box"><h2>Ваши подключения ({cnt} / {MAX_API_KEYS})</h2>'
+
+    if keys:
+        for k in keys:
+            dot   = 'dg' if k['active'] else 'dr'
+            badge = '<span class="bg g">Активен</span>' if k['active'] else '<span class="bg r">Ошибка</span>'
+            c += (
+                '<div class="kc"><div style="flex:1">'
+                '<div class="kn">' + k['shop_name'] + '</div>'
+                '<span class="ki">Client ID: ' + k['client_id'] + '</span>'
+                '<span class="ki">API Key: ....' + k['hint'] + '</span>'
+            )
+            if k.get('check_msg'):
+                c += '<div style="font-size:.8rem;color:#666;margin-top:.3rem">' + k['check_msg'] + '</div>'
+            added = str(k['added_at'])[:10] if k.get('added_at') else '-'
+            c += (
+                '<div style="font-size:.8rem;color:#999;margin-top:.2rem">Добавлен: ' + added + '</div>'
+                '</div>'
+                '<div style="display:flex;align-items:center;gap:.5rem">'
+                '<span class="dot ' + dot + '"></span>' + badge +
+                '</div>'
+                '<div style="display:flex;gap:.5rem">'
+                
+                '<form method="POST" action="/api-keys/recheck/' + str(k['id']) + '">'
+                '<button class="btn bs" style="background:#e8f4fd;color:#1e40af;border:1px solid #bfdbfe">&#128260; Перепроверить</button>'
+                '</form>'
+                '<form method="POST" action="/api-keys/del/' + str(k['id']) + '">'
+                '<button class="btn bd bs" onclick="return confirm(\'Удалить?\')">Удалить</button>'
+                '</form></div></div>'
+            )
+    else:
+        c += '<div class="empty"><p style="font-size:2rem">&#128273;</p><p style="margin-top:1rem">Нет добавленных ключей</p></div>'
+
+    c += '</div>'
+
     return render(c, 'keys')
 
 
@@ -158,24 +158,19 @@ def add_key():
     u = me()
     if not u:
         return redirect('/login')
-
     if db.count_keys(u['id']) >= MAX_API_KEYS:
         return redirect('/api-keys?err=Достигнут+лимит+ключей')
-
     shop = clean(request.form.get('shop', ''), 100)
     cid  = clean(request.form.get('cid',  ''), 50)
     akey = request.form.get('akey', '').strip()
-
     if not shop or not cid or not akey:
         return redirect(f'/api-keys?err=Заполните+все+поля&shop={shop}&cid={cid}')
     if not cid.isdigit():
         return redirect(f'/api-keys?err=Client+ID+должен+быть+числом&shop={shop}&cid={cid}')
     if len(akey) < 10:
         return redirect(f'/api-keys?err=API+Key+слишком+короткий&shop={shop}&cid={cid}')
-
     ok, msg = verify_ozon(cid, akey)
     db.add_key(u['id'], shop, cid, akey, akey[-4:], ok, msg)
-
     if ok:
         return redirect('/api-keys?msg=Магазин+' + shop + '+успешно+подключён')
     return redirect('/api-keys?err=Ключ+добавлен+но+проверка:+' + msg.replace(' ', '+'))
