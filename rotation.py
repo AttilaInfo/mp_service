@@ -330,7 +330,7 @@ def _collect_variant_stats(conn, test, key, variant, all_variants):
     if date_from > date_to:
         return
 
-    log.info(f'  Сбор статистики {variant["label"]}: {date_from} → {date_to} SKU={test["sku"]}')
+    log.info(f'  Сбор статистики {variant["label"]}: {date_from} → {date_to} SKU={test["sku"]} activated_at={variant.get("activated_at")} created_at={test.get("created_at")}')
     try:
         r = requests.post(
             f'{OZON_API_URL}/v1/analytics/data',
