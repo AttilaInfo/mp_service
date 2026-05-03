@@ -133,7 +133,7 @@ def api_keys():
             '<input type="password" id="akey_field" name="akey" class="fi" '
             'placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" required maxlength="200">'
             '</div>'
-            '<button class="btn bp" onclick="this.disabled=true;this.innerHTML=\'&#9203; Проверка...\';">Проверить и сохранить</button>'
+            '<button class="btn bp" onclick="var b=this;setTimeout(function(){b.disabled=true;b.innerHTML=\'&#9203; Проверка...\';},10);">Проверить и сохранить</button>'
             '</form>'
         )
     else:
@@ -159,7 +159,7 @@ def api_keys():
         '<input type="password" name="perf_client_secret" class="fi" '
         'placeholder="Ваш Client Secret" required maxlength="300">'
         '<div class="hn">Хранится безопасно</div></div>'
-        '<button class="btn bp" onclick="this.disabled=true;this.innerHTML=\'&#9203; Подключение...\';">Сохранить Performance API ключ</button>'
+        '<button class="btn bp" onclick="var b=this;setTimeout(function(){b.disabled=true;b.innerHTML=\'&#9203; Подключение...\';},10);">Сохранить Performance API ключ</button>'
         '</form>'
     )
     c += '</div>'
