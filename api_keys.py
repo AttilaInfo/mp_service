@@ -55,7 +55,7 @@ def api_keys():
                   '<button class="btn bs" style="font-size:.8rem;padding:.3rem .7rem;background:#e8f4fd;color:#1e40af;border:1px solid #bfdbfe" title="Перепроверить">&#128260;</button>'
                   '</form>'
                   '<form method="POST" action="/api-keys/del/' + str(k['id']) + '">'
-                  '<button class="btn bd bs" style="font-size:.8rem;padding:.3rem .7rem" onclick="return confirm(&apos;Удалить?&apos;)" title="Удалить">&#10005;</button>'
+                  '<button class="btn bd bs" style="font-size:.8rem;padding:.3rem .7rem" onclick="showConfirm(this.closest(&apos;form&apos;), &apos;Удалить подключение?&apos;, &apos;Это действие нельзя отменить.&apos;);return false;" title="Удалить">&#10005;</button>'
                   '</form>'
                   '</div></div>')
             c += '</div>'
@@ -76,7 +76,7 @@ def api_keys():
                       '</div>'
                       '<form method="POST" action="/api-keys/perf/del/' + str(pk['id']) + '">'
                       '<button class="btn bd bs" style="font-size:.8rem;padding:.3rem .7rem" '
-                      'onclick="return confirm(&apos;Удалить Performance API ключ?&apos;)" title="Удалить">&#10005;</button>'
+                      'onclick="showConfirm(this.closest(&apos;form&apos;), &apos;Удалить Performance API?&apos;, &apos;CTR по рекламным кампаниям перестанет собираться.&apos;);return false;" title="Удалить">&#10005;</button>'
                       '</form>'
                       '</div></div>')
         else:
@@ -157,6 +157,27 @@ def api_keys():
         '</form>'
     )
     c += '</div>'
+    c += ('<div id="cm" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);backdrop-filter:blur(2px);align-items:center;justify-content:center">'
+           '<div style="background:#fff;border-radius:16px;padding:2rem;width:340px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,.25)">'
+           '<p style="font-size:1.5rem;margin:0 0 .5rem">&#128465;</p>'
+           '<p style="font-weight:700;font-size:1.05rem;margin:0 0 .4rem" id="cm_t"></p>'
+           '<p style="font-size:.9rem;color:#666;margin:0 0 1.5rem" id="cm_s"></p>'
+           '<div style="display:flex;gap:.75rem;justify-content:flex-end">'
+           '<button onclick="closeCM()" style="background:#f0f2f5;border:1px solid #ddd;color:#444;border-radius:8px;padding:.5rem 1.2rem;cursor:pointer">Отмена</button>'
+           '<button id="cm_ok" style="background:#e53e3e;color:#fff;border:none;border-radius:8px;padding:.5rem 1.4rem;font-weight:600;cursor:pointer">Удалить</button>'
+           '</div></div></div>'
+           '<style>#cm>div{animation:cmIn .15s ease}'
+           '@keyframes cmIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}</style>'
+           '<script>var _cmf=null;'
+           'function showConfirm(f,t,s){var m=document.getElementById("cm");'
+           'document.getElementById("cm_t").textContent=t;'
+           'document.getElementById("cm_s").textContent=s;'
+           '_cmf=f;m.style.display="flex";}'
+           'function closeCM(){document.getElementById("cm").style.display="none";_cmf=null;}'
+           'document.getElementById("cm_ok").onclick=function(){if(_cmf){closeCM();_cmf.submit();}};'
+           'document.getElementById("cm").addEventListener("click",function(e){if(e.target===this)closeCM();});'
+           'document.addEventListener("keydown",function(e){if(e.key==="Escape")closeCM();});'
+           '</script>')
     return render(c, 'keys')
 
 
