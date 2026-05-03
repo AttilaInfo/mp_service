@@ -338,7 +338,7 @@ def _collect_variant_stats(conn, test, key, variant, all_variants):
             json={
                 'date_from': date_from,
                 'date_to':   date_to,
-                'metrics':   ['hits_view_pdp', 'hits_tocart', 'hits_view'],
+                'metrics':   ['hits_view_pdp', 'hits_tocart'],
                 'dimension': ['day'],
                 'filters':   [{'key': 'offer_id', 'op': 'EQ', 'value': test['sku']}],
                 'limit':     31,
@@ -350,9 +350,9 @@ def _collect_variant_stats(conn, test, key, variant, all_variants):
             rows = r.json().get('result', {}).get('data', [])
             if rows:
                 # Суммируем по всем дням периода
-                views  = sum(int(row.get('metrics', [0])[0]) for row in rows if row.get('metrics'))
+                views  = sum(int(row.get('metrics', [0])[0])   for row in rows if row.get('metrics'))
                 tocart = sum(int(row.get('metrics', [0,0])[1]) for row in rows if len(row.get('metrics',[]))>1)
-                clicks = sum(int(row.get('metrics', [0,0,0])[2]) for row in rows if len(row.get('metrics',[]))>2)
+                clicks = tocart  # используем tocart как приближение кликов
                 n      = max(1, len([v for v in all_variants if not v.get('paused')]))
                 views_v  = views  // n
                 tocart_v = tocart // n
@@ -361,7 +361,7 @@ def _collect_variant_stats(conn, test, key, variant, all_variants):
                 with conn.cursor() as cur:
                     cur.execute(
                         "UPDATE test_variants SET views=%s, clicks=%s, tocart=%s, ctr=%s WHERE id=%s",
-                        (views_v, clicks_v, tocart_v, ctr, variant['id'])
+                        (views_v, tocart_v, tocart_v, ctr, variant['id'])
                     )
                 conn.commit()
                 log.info(f'  Статистика {variant["label"]}: показы={views_v} клики={clicks_v} корзина={tocart_v}')
