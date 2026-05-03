@@ -311,6 +311,61 @@ def weakest_variant(variants):
     return min(variants, key=lambda v: v.get('views') or 0)
 
 
+
+def _collect_variant_stats(conn, test, key, variant, all_variants):
+    """Запрашивает статистику из Озона за период активности варианта."""
+    activated_at = variant.get('activated_at')
+    if not activated_at:
+        return
+    if isinstance(activated_at, str):
+        try:
+            activated_at = datetime.fromisoformat(activated_at)
+        except Exception:
+            return
+
+    date_from = activated_at.strftime('%Y-%m-%d')
+    date_to   = datetime.now(timezone.utc).replace(tzinfo=None).strftime('%Y-%m-%d')
+    if date_from > date_to:
+        return
+
+    try:
+        r = requests.post(
+            f'{OZON_API_URL}/v1/analytics/data',
+            headers=ozon_headers(key),
+            json={
+                'date_from': date_from, 'date_to': date_to,
+                'metrics':   ['hits_view_pdp', 'hits_tocart', 'hits_view'],
+                'dimension': ['offer_id'],
+                'filters':   [{'key': 'offer_id', 'op': 'EQ', 'value': test['sku']}],
+                'limit': 1,
+            },
+            timeout=15
+        )
+        if r.status_code == 200:
+            rows = r.json().get('result', {}).get('data', [])
+            if rows:
+                m      = rows[0].get('metrics', [0, 0, 0])
+                views  = int(m[0]) if len(m) > 0 else 0
+                tocart = int(m[1]) if len(m) > 1 else 0
+                clicks = int(m[2]) if len(m) > 2 else 0
+                n      = max(1, len([v for v in all_variants if not v.get('paused')]))
+                views_v  = views  // n
+                tocart_v = tocart // n
+                clicks_v = clicks // n
+                ctr = round(clicks_v / views_v * 100, 2) if views_v > 0 else 0.0
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "UPDATE test_variants SET views=%s, clicks=%s, tocart=%s, ctr=%s WHERE id=%s",
+                        (views_v, clicks_v, tocart_v, ctr, variant['id'])
+                    )
+                conn.commit()
+                log.info(f'  Статистика {variant["label"]}: показы={views_v} клики={clicks_v} корзина={tocart_v}')
+        elif r.status_code == 429:
+            log.warning('  analytics rate limit')
+    except Exception as e:
+        log.error(f'  _collect_variant_stats: {e}')
+
+
 # ── Основная логика ───────────────────────────────────────────────────────────
 
 def process_test(conn, test, key):
@@ -382,13 +437,20 @@ def process_test(conn, test, key):
                     rotation_count=COALESCE(rotation_count,0)+1
                 WHERE id=%s
             """, (nxt['label'], test_id))
-            # Запоминаем views на момент ротации (для стратегии views:N)
             cur.execute("""
                 UPDATE test_variants
                 SET views_at_rotation=views
                 WHERE id=%s
             """, (nxt['id'],))
         conn.commit()
+        # Записываем время активации нового варианта
+        try:
+            import database as db_local
+            db_local.activate_variant(test_id, nxt['label'])
+        except Exception as e:
+            log.warning(f'  activate_variant error: {e}')
+        # Обновляем статистику деактивированного варианта
+        _collect_variant_stats(conn, test, key, cur_variant, variants)
 
 
 def _apply_photo(test, key, variant, all_variants):
