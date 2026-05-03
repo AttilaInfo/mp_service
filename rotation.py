@@ -339,7 +339,7 @@ def _collect_variant_stats(conn, test, key, variant, all_variants, product_id=No
                 'date_from': date_from,
                 'date_to':   date_to,
                 'metrics':   ['hits_view_pdp', 'hits_tocart', 'revenue', 'ordered_units'],
-                'dimension': ['sku'],
+                'dimension': ['day'],
                 'limit':     1000,
             },
             timeout=20
@@ -348,22 +348,15 @@ def _collect_variant_stats(conn, test, key, variant, all_variants, product_id=No
         if r.status_code == 200:
             rows = r.json().get('result', {}).get('data', [])
             if rows:
-                # Ищем строку по product_id Озона
-                pid = str(product_id) if product_id else None
-                row = None
-                if pid:
-                    row = next(
-                        (r for r in rows
-                         if (r.get('dimensions') or [{}])[0].get('id') == pid),
-                        None
-                    )
-                if not row:
-                    log.warning(f'  product_id {pid} не найден, примеры: {[(r.get("dimensions") or [{}])[0].get("id") for r in rows[:3]]}')
-                    return
-                m      = row.get('metrics', [0, 0])
-                views  = int(m[0]) if len(m) > 0 else 0
-                tocart = int(m[1]) if len(m) > 1 else 0
+                # Суммируем по всем дням (данные по магазину за период)
+                views  = sum(int(row.get('metrics',[0])[0])   for row in rows if row.get('metrics'))
+                tocart = sum(int(row.get('metrics',[0,0])[1]) for row in rows if len(row.get('metrics',[]))>1)
                 clicks = tocart
+                # Делим на количество вариантов — приближение на период активности
+                n = max(1, len([v for v in all_variants if not v.get('paused')]))
+                views  = views  // n
+                tocart = tocart // n
+                clicks = clicks // n
                 n      = max(1, len([v for v in all_variants if not v.get('paused')]))
                 views_v  = views  // n
                 tocart_v = tocart // n
