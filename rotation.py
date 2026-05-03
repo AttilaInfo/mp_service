@@ -330,6 +330,7 @@ def _collect_variant_stats(conn, test, key, variant, all_variants):
     if date_from > date_to:
         return
 
+    log.info(f'  Сбор статистики {variant["label"]}: {date_from} → {date_to} SKU={test["sku"]}')
     try:
         r = requests.post(
             f'{OZON_API_URL}/v1/analytics/data',
@@ -343,6 +344,7 @@ def _collect_variant_stats(conn, test, key, variant, all_variants):
             },
             timeout=15
         )
+        log.info(f'  analytics status={r.status_code} body={r.text[:200]}')
         if r.status_code == 200:
             rows = r.json().get('result', {}).get('data', [])
             if rows:
@@ -362,6 +364,8 @@ def _collect_variant_stats(conn, test, key, variant, all_variants):
                     )
                 conn.commit()
                 log.info(f'  Статистика {variant["label"]}: показы={views_v} клики={clicks_v} корзина={tocart_v}')
+            else:
+                log.warning(f'  analytics: пустой ответ (нет данных за период)')
         elif r.status_code == 429:
             log.warning('  analytics rate limit')
     except Exception as e:
