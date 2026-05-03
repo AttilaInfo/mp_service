@@ -28,12 +28,12 @@ def api_keys():
 
     # ── Единая таблица подключений ─────────────────────────────────────────
     c += '<div class="box">'
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">'
-    '<h2 style="margin:0">Ваши подключения</h2>'
-    '<div style="display:flex;gap:.5rem">'
-    '<a href="#seller_form" class="btn" style="font-size:.82rem;padding:.35rem .8rem;background:#f5f3ff;border:1px solid #667eea;color:#667eea">+ Seller API</a>'
-    '<a href="#perf_form" class="btn" style="font-size:.82rem;padding:.35rem .8rem;background:#d4edda;border:1px solid #27ae60;color:#155724">+ Performance API</a>'
-    '</div></div>'
+    c += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.2rem">'
+    c += '<h2 style="margin:0">Ваши подключения</h2>'
+    c += '<div style="display:flex;gap:.5rem">'
+    c += '<a href="#seller_form" class="btn" style="font-size:.82rem;padding:.35rem .9rem;background:#f5f3ff;border:1px solid #667eea;color:#667eea;text-decoration:none">+ Seller API</a>'
+    c += '<a href="#perf_form" class="btn" style="font-size:.82rem;padding:.35rem .9rem;background:#d4edda;border:1px solid #27ae60;color:#155724;text-decoration:none">+ Performance API</a>'
+    c += '</div></div>'
     if keys or perf_keys:
         # Seller API строки
         for k in keys:
@@ -82,7 +82,7 @@ def api_keys():
                       '</div>'
                       '<form method="POST" action="/api-keys/perf/del/' + str(pk['id']) + '">'
                       '<button class="btn bd bs" style="font-size:.8rem;padding:.3rem .7rem" '
-                      'onclick="showConfirm(this.closest(&apos;form&apos;),&apos;Удалить Performance API?&apos;,&apos;CTR по рекламным кампаниям перестанет собираться.&apos;);return false;" title="Удалить">&#10005;</button>'
+                      'onclick="showConfirm(this.closest(&apos;form&apos;),&apos;Удалить Performance API?&apos;,&apos;CTR по кампаниям перестанет собираться.&apos;);return false;" title="Удалить">&#10005;</button>'
                       '</form>'
                       '</div></div>')
         else:
@@ -175,10 +175,8 @@ def api_keys():
            '<button id="cm_ok" style="flex:1;background:linear-gradient(135deg,#e53e3e,#c53030);color:#fff;border:none;border-radius:10px;padding:.6rem 1rem;font-weight:600;cursor:pointer;font-size:.9rem;box-shadow:0 4px 12px rgba(229,62,62,.35)">Удалить</button>'
            '</div></div></div>'
            '<style>#cm>div{animation:cmIn .2s cubic-bezier(.34,1.56,.64,1)}@keyframes cmIn{from{opacity:0;transform:scale(.88)}to{opacity:1;transform:scale(1)}}</style>'
-           '<script>'
-           'var _cmf=null;'
-           'function showConfirm(f,t,s){'
-           'var m=document.getElementById("cm");'
+           '<script>var _cmf=null;'
+           'function showConfirm(f,t,s){var m=document.getElementById("cm");'
            'document.getElementById("cm_t").textContent=t;'
            'document.getElementById("cm_s").textContent=s;'
            '_cmf=f;m.style.display="flex";}'
