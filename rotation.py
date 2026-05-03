@@ -338,7 +338,7 @@ def _collect_variant_stats(conn, test, key, variant, all_variants):
             json={
                 'date_from': date_from,
                 'date_to':   date_to,
-                'metrics':   ['views', 'ordered_units', 'revenue'],
+                'metrics':   ['hits_view_pdp', 'hits_tocart'],
                 'dimension': ['day'],
                 'limit':     31,
             },
@@ -349,7 +349,7 @@ def _collect_variant_stats(conn, test, key, variant, all_variants):
             rows = r.json().get('result', {}).get('data', [])
             if rows:
                 # Суммируем по всем дням периода
-                views  = sum(int(row.get('metrics', [0])[0])   for row in rows if row.get('metrics'))
+                views  = sum(int(row.get('metrics', [0,0])[0]) for row in rows if row.get('metrics'))
                 tocart = sum(int(row.get('metrics', [0,0])[1]) for row in rows if len(row.get('metrics',[]))>1)
                 clicks = tocart
                 n      = max(1, len([v for v in all_variants if not v.get('paused')]))
