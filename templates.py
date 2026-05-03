@@ -225,7 +225,7 @@ def alert(msg, kind='ok'):
 
 def nav_bar(active_page):
     pages = [
-        ('/dashboard', 'dash',    'Панель'),
+        ('/dashboard', 'dash',    'Дашборд'),
         ('/tests',     'tests',   'Тесты'),
         ('/api-keys',  'keys',    'API ключи'),
         ('/settings',  'cfg',     'Настройки'),
