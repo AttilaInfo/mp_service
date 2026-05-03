@@ -99,7 +99,7 @@ def api_keys():
                 '<span class="dot ' + dot + '"></span>' + badge +
                 '</div>'
                 '<div style="display:flex;gap:.5rem">'
-                '<a href="/api-keys/test/' + str(k['id']) + '" class="btn bs" style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0">&#128270; Проверить данные</a>'
+                
                 '<form method="POST" action="/api-keys/recheck/' + str(k['id']) + '">'
                 '<button class="btn bs" style="background:#e8f4fd;color:#1e40af;border:1px solid #bfdbfe">&#128260; Перепроверить</button>'
                 '</form>'
@@ -174,49 +174,7 @@ def recheck_key(key_id):
     return redirect('/api-keys?err=Проверка+не+прошла:+' + msg.replace(' ', '+'))
 
 
-@api_keys_bp.route('/api-keys/test/<int:key_id>')
-def test_key(key_id):
-    u = me()
-    if not u:
-        return redirect('/login')
-    keys = db.get_keys(u['id'])
-    key = next((k for k in keys if k['id'] == key_id), None)
-    if not key:
-        return redirect('/api-keys?err=Ключ+не+найден')
-    import requests as req
-    from config import OZON_API_URL
-    headers = {'Client-Id': key['client_id'], 'Api-Key': key['api_key'], 'Content-Type': 'application/json'}
-    results = []
-    try:
-        r = req.post(f'{OZON_API_URL}/v3/product/list', headers=headers, json={'filter': {}, 'last_id': '', 'limit': 5}, timeout=8)
-        if r.status_code == 200:
-            items = r.json().get('result', {}).get('items', [])
-            results.append(('✅ Товары', f'Найдено товаров в выборке: {len(items)}'))
-        else:
-            results.append(('⚠️ Товары', f'Статус {r.status_code}: {r.text[:200]}'))
-    except Exception as e:
-        results.append(('❌ Товары', str(e)[:200]))
-    try:
-        r = req.post(f'{OZON_API_URL}/v2/warehouse/list', headers=headers, json={}, timeout=8)
-        if r.status_code == 200:
-            wh = r.json().get('result', [])
-            results.append(('✅ Склады', f'Найдено складов: {len(wh)}'))
-        else:
-            results.append(('⚠️ Склады', f'Статус {r.status_code}: {r.text[:200]}'))
-    except Exception as e:
-        results.append(('❌ Склады', str(e)[:200]))
-    rows_html = ''
-    for icon_title, detail in results:
-        color = '#d4edda' if '✅' in icon_title else '#fff3cd' if '⚠️' in icon_title else '#f8d7da'
-        rows_html += f'<div style="background:{color};border-radius:10px;padding:1rem;margin-bottom:.8rem"><strong>{icon_title}</strong><br><span style="font-size:.9rem;color:#444">{detail}</span></div>'
-    c = (
-        f'<p class="ttl">&#128270; Тест подключения — {key["shop_name"]}</p>'
-        '<div class="box">'
-        f'<p style="margin-bottom:1.2rem;color:#666">Client ID: <strong>{key["client_id"]}</strong></p>'
-        + rows_html +
-        '<div style="margin-top:1.5rem"><a href="/api-keys" class="btn bp">&#8592; Назад к ключам</a></div></div>'
-    )
-    return render(c, 'keys')
+
 
 
 @api_keys_bp.route('/api-keys/del/<int:key_id>', methods=['POST'])
