@@ -123,6 +123,127 @@ def new_test():
     <div class="hn" id="prod_hint_text">Нажмите на поле — появится список товаров с остатками</div>
   </div>
 
+  <!-- Шаг 3: Рекламная кампания -->
+  <!-- Шаг 3: Рекламная кампания -->
+  <div class="fg" id="camp_section" style="border:2px solid #667eea;border-radius:12px;padding:1.2rem;background:#f5f3ff">
+    <label style="font-weight:700;font-size:1rem;color:#4c1d95;display:flex;align-items:center;gap:.5rem">
+      &#128640; Рекламная кампания <span style="font-weight:400;font-size:.82rem;color:#888">(обязательно для точного CTR)</span>
+    </label>
+    <p style="font-size:.85rem;color:#666;margin:.6rem 0 1rem">
+      Выберите рекламную кампанию Озона в которой участвует этот товар.
+      Статистика CTR будет считаться из неё.<br>
+      <strong>Рекомендуем:</strong> создайте отдельную кампанию «1 товар» специально для теста.
+    </p>
+    <div id="camp_status" style="margin-bottom:.8rem">
+      <span style="color:#aaa;font-size:.9rem" id="camp_loading">&#128260; Загрузка кампаний...</span>
+    </div>
+    <input type="hidden" name="campaign_ids" id="camp_ids_field" value="">
+    <div style="display:flex;gap:.5rem;align-items:center;margin-top:.5rem">
+      <button type="button" onclick="loadCampaigns()" class="btn" style="background:#e8f4fd;border:1px solid #bfdbfe;color:#1e40af;font-size:.85rem;padding:.4rem .9rem">
+        &#128260; Обновить список кампаний
+      </button>
+      <span id="camp_hint" style="font-size:.8rem;color:#999"></span>
+    </div>
+  </div>
+
+  <div id="no_perf_warning" style="display:none;background:#fff3cd;border:1px solid #ffe082;border-radius:10px;padding:1rem;margin-bottom:1rem">
+    <p style="font-size:.9rem">&#9888; Для точного CTR нужен <strong>Performance API</strong>.
+    <a href="/api-keys" style="color:#1e40af;font-weight:600">Подключите его в разделе API ключи</a> и вернитесь.</p>
+  </div>
+
+  <button class="btn bp" style="width:100%" id="submit_btn" disabled>&#129514; Запустить тест</button>
+  <p id="submit_hint" style="text-align:center;font-size:.82rem;color:#e74c3c;margin-top:.5rem">Выберите рекламную кампанию чтобы запустить тест</p>
+</form>
+
+<script>
+var _selectedCamps = [];
+
+function loadCampaigns() {{
+  var skuEl = document.getElementById('selected_sku');
+  var sku = skuEl ? skuEl.value : '';
+  if (!sku) {{
+    document.getElementById('camp_loading').textContent = 'Сначала выберите товар';
+    return;
+  }}
+  document.getElementById('camp_loading').style.display = '';
+  document.getElementById('camp_loading').textContent = '&#128260; Загрузка кампаний...';
+  document.getElementById('camp_status').innerHTML = '<span style="color:#aaa;font-size:.9rem" id="camp_loading">&#128260; Загрузка кампаний...</span>';
+
+  fetch('/api/perf-campaigns?sku=' + encodeURIComponent(sku))
+    .then(function(r){{ return r.json(); }})
+    .then(function(data) {{
+      var el = document.getElementById('camp_status');
+      if (data.error === 'no_perf_key') {{
+        document.getElementById('no_perf_warning').style.display = '';
+        document.getElementById('variants_section').style.display = '';
+        document.getElementById('camp_section').style.borderColor = '#ffc107';
+        el.innerHTML = '';
+        return;
+      }}
+      document.getElementById('no_perf_warning').style.display = 'none';
+
+      // Фильтруем кампании где участвует наш товар
+      var camps = data.campaigns || [];
+      if (!camps.length) {{
+        el.innerHTML = '<div style="background:#fff3cd;border-radius:8px;padding:.8rem;font-size:.88rem">'
+          + '&#9888; Активных рекламных кампаний с этим товаром не найдено.<br>'
+          + '<strong>Создайте кампанию</strong> в Озоне → Продвижение → Реклама → Оплата за клик, '
+          + 'добавьте этот товар и вернитесь. Затем нажмите «Обновить список».</div>';
+        document.getElementById('submit_btn').disabled = true;
+        document.getElementById('submit_hint').style.display = '';
+        document.getElementById('camp_section').style.borderColor = '#e74c3c';
+        return;
+      }}
+
+      var html = '';
+      camps.forEach(function(c) {{
+        html += '<label style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;cursor:pointer;font-size:.9rem">'
+          + '<input type="checkbox" value="' + c.id + '" onchange="updateCampSel()" style="accent-color:#667eea"> '
+          + c.name
+          + ' <span style="color:#aaa;font-size:.78rem">(ID: ' + c.id + ')</span></label>';
+      }});
+      el.innerHTML = html;
+      document.getElementById('camp_section').style.borderColor = '#ddd';
+    }})
+    .catch(function() {{
+      document.getElementById('camp_status').innerHTML = '<span style="color:#e74c3c;font-size:.9rem">&#10060; Ошибка загрузки. Попробуйте ещё раз.</span>';
+    }});
+}}
+
+function updateCampSel() {{
+  var ids = [];
+  document.querySelectorAll('#camp_status input:checked').forEach(function(x){{ ids.push(x.value); }});
+  _selectedCamps = ids;
+  document.getElementById('camp_ids_field').value = ids.join(',');
+  var btn = document.getElementById('submit_btn');
+  var hint = document.getElementById('submit_hint');
+  if (ids.length > 0) {{
+    btn.disabled = false;
+    hint.style.display = 'none';
+    document.getElementById('camp_section').style.borderColor = '#667eea';
+  }} else {{
+    btn.disabled = true;
+    hint.style.display = '';
+    document.getElementById('camp_section').style.borderColor = '#e74c3c';
+  }}
+}}
+
+// Загружаем кампании автоматически когда выбран товар
+document.addEventListener('DOMContentLoaded', function() {{
+  // Слушаем выбор товара
+  var observer = new MutationObserver(function() {{
+    var sku = document.getElementById('selected_sku');
+    if (sku && sku.value) loadCampaigns();
+  }});
+  var skuField = document.getElementById('selected_sku');
+  if (skuField) {{
+    observer.observe(skuField, {{attributes: true, attributeFilter: ['value']}});
+  }}
+}});
+</script>
+
+  <!-- Варианты фото (показываются после выбора кампании) -->
+  <div id="variants_section" style="display:none">
   <!-- Варианты фото -->
   <div class="fg">
     <label>Варианты фото <span style="color:#667eea;font-size:.85rem">(от 2 до 10)</span></label>
@@ -142,6 +263,7 @@ def new_test():
     </div>
   </div>
 
+  </div>
   <!-- Стратегия -->
   <div class="fg">
     <label>Стратегия смены фото</label>
@@ -330,122 +452,6 @@ def new_test():
   }});
   </script>
 
-  <!-- Шаг 3: Рекламная кампания -->
-  <div class="fg" id="camp_section" style="border:2px solid #667eea;border-radius:12px;padding:1.2rem;background:#f5f3ff">
-    <label style="font-weight:700;font-size:1rem;color:#4c1d95;display:flex;align-items:center;gap:.5rem">
-      &#128640; Рекламная кампания <span style="font-weight:400;font-size:.82rem;color:#888">(обязательно для точного CTR)</span>
-    </label>
-    <p style="font-size:.85rem;color:#666;margin:.6rem 0 1rem">
-      Выберите рекламную кампанию Озона в которой участвует этот товар.
-      Статистика CTR будет считаться из неё.<br>
-      <strong>Рекомендуем:</strong> создайте отдельную кампанию «1 товар» специально для теста.
-    </p>
-    <div id="camp_status" style="margin-bottom:.8rem">
-      <span style="color:#aaa;font-size:.9rem" id="camp_loading">&#128260; Загрузка кампаний...</span>
-    </div>
-    <input type="hidden" name="campaign_ids" id="camp_ids_field" value="">
-    <div style="display:flex;gap:.5rem;align-items:center;margin-top:.5rem">
-      <button type="button" onclick="loadCampaigns()" class="btn" style="background:#e8f4fd;border:1px solid #bfdbfe;color:#1e40af;font-size:.85rem;padding:.4rem .9rem">
-        &#128260; Обновить список кампаний
-      </button>
-      <span id="camp_hint" style="font-size:.8rem;color:#999"></span>
-    </div>
-  </div>
-
-  <div id="no_perf_warning" style="display:none;background:#fff3cd;border:1px solid #ffe082;border-radius:10px;padding:1rem;margin-bottom:1rem">
-    <p style="font-size:.9rem">&#9888; Для точного CTR нужен <strong>Performance API</strong>.
-    <a href="/api-keys" style="color:#1e40af;font-weight:600">Подключите его в разделе API ключи</a> и вернитесь.</p>
-  </div>
-
-  <button class="btn bp" style="width:100%" id="submit_btn" disabled>&#129514; Запустить тест</button>
-  <p id="submit_hint" style="text-align:center;font-size:.82rem;color:#e74c3c;margin-top:.5rem">Выберите рекламную кампанию чтобы запустить тест</p>
-</form>
-
-<script>
-var _selectedCamps = [];
-
-function loadCampaigns() {{
-  var skuEl = document.getElementById('selected_sku');
-  var sku = skuEl ? skuEl.value : '';
-  if (!sku) {{
-    document.getElementById('camp_loading').textContent = 'Сначала выберите товар';
-    return;
-  }}
-  document.getElementById('camp_loading').style.display = '';
-  document.getElementById('camp_loading').textContent = '&#128260; Загрузка кампаний...';
-  document.getElementById('camp_status').innerHTML = '<span style="color:#aaa;font-size:.9rem" id="camp_loading">&#128260; Загрузка кампаний...</span>';
-
-  fetch('/api/perf-campaigns?sku=' + encodeURIComponent(sku))
-    .then(function(r){{ return r.json(); }})
-    .then(function(data) {{
-      var el = document.getElementById('camp_status');
-      if (data.error === 'no_perf_key') {{
-        document.getElementById('no_perf_warning').style.display = '';
-        document.getElementById('camp_section').style.borderColor = '#ffc107';
-        el.innerHTML = '';
-        return;
-      }}
-      document.getElementById('no_perf_warning').style.display = 'none';
-
-      // Фильтруем кампании где участвует наш товар
-      var camps = data.campaigns || [];
-      if (!camps.length) {{
-        el.innerHTML = '<div style="background:#fff3cd;border-radius:8px;padding:.8rem;font-size:.88rem">'
-          + '&#9888; Активных рекламных кампаний с этим товаром не найдено.<br>'
-          + '<strong>Создайте кампанию</strong> в Озоне → Продвижение → Реклама → Оплата за клик, '
-          + 'добавьте этот товар и вернитесь. Затем нажмите «Обновить список».</div>';
-        document.getElementById('submit_btn').disabled = true;
-        document.getElementById('submit_hint').style.display = '';
-        document.getElementById('camp_section').style.borderColor = '#e74c3c';
-        return;
-      }}
-
-      var html = '';
-      camps.forEach(function(c) {{
-        html += '<label style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;cursor:pointer;font-size:.9rem">'
-          + '<input type="checkbox" value="' + c.id + '" onchange="updateCampSel()" style="accent-color:#667eea"> '
-          + c.name
-          + ' <span style="color:#aaa;font-size:.78rem">(ID: ' + c.id + ')</span></label>';
-      }});
-      el.innerHTML = html;
-      document.getElementById('camp_section').style.borderColor = '#ddd';
-    }})
-    .catch(function() {{
-      document.getElementById('camp_status').innerHTML = '<span style="color:#e74c3c;font-size:.9rem">&#10060; Ошибка загрузки. Попробуйте ещё раз.</span>';
-    }});
-}}
-
-function updateCampSel() {{
-  var ids = [];
-  document.querySelectorAll('#camp_status input:checked').forEach(function(x){{ ids.push(x.value); }});
-  _selectedCamps = ids;
-  document.getElementById('camp_ids_field').value = ids.join(',');
-  var btn = document.getElementById('submit_btn');
-  var hint = document.getElementById('submit_hint');
-  if (ids.length > 0) {{
-    btn.disabled = false;
-    hint.style.display = 'none';
-    document.getElementById('camp_section').style.borderColor = '#667eea';
-  }} else {{
-    btn.disabled = true;
-    hint.style.display = '';
-    document.getElementById('camp_section').style.borderColor = '#e74c3c';
-  }}
-}}
-
-// Загружаем кампании автоматически когда выбран товар
-document.addEventListener('DOMContentLoaded', function() {{
-  // Слушаем выбор товара
-  var observer = new MutationObserver(function() {{
-    var sku = document.getElementById('selected_sku');
-    if (sku && sku.value) loadCampaigns();
-  }});
-  var skuField = document.getElementById('selected_sku');
-  if (skuField) {{
-    observer.observe(skuField, {{attributes: true, attributeFilter: ['value']}});
-  }}
-}});
-</script>
 </div>
 
 
