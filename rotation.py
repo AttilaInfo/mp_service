@@ -340,7 +340,6 @@ def _collect_variant_stats(conn, test, key, variant, all_variants):
                 'date_to':   date_to,
                 'metrics':   ['hits_view_pdp', 'hits_tocart'],
                 'dimension': ['day'],
-                'filters':   [{'key': 'offer_id', 'op': 'EQ', 'value': test['sku']}],
                 'limit':     31,
             },
             timeout=20
