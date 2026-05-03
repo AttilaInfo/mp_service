@@ -46,7 +46,6 @@ def tests():
                '<div style="font-weight:600">Seller API Озона</div>'
                '<div style="font-size:.85rem;color:#555">Нужен для управления фото товаров</div>'
                '</div>'
-               + ('' if has_seller_api else '<a href="/api-keys" class="btn bp" style="white-space:nowrap;font-size:.85rem;padding:.4rem .9rem">Подключить</a>') +
                '</div>'
                '<div style="display:flex;align-items:center;gap:.75rem;background:' + ('#d4edda' if has_perf_api else '#f8d7da') + ';border-radius:10px;padding:.75rem 1rem">'
                '<span style="font-size:1.3rem">' + ('&#10003;' if has_perf_api else '&#10005;') + '</span>'
@@ -54,10 +53,9 @@ def tests():
                '<div style="font-weight:600">Performance API Озона &#128640;</div>'
                '<div style="font-size:.85rem;color:#555">Нужен для точного CTR через рекламные кампании</div>'
                '</div>'
-               + ('' if has_perf_api else '<a href="/api-keys" class="btn bp" style="white-space:nowrap;font-size:.85rem;padding:.4rem .9rem">Подключить</a>') +
                '</div>'
                '</div>'
-               + ('<p style="font-size:.85rem;color:#666;margin-top:1rem">Когда оба API подключены — кнопка «Создать тест» появится автоматически.</p>' if not (has_seller_api and has_perf_api) else '') +
+               + ('<div style="margin-top:1rem;text-align:right"><a href="/api-keys" class="btn bp">Подключить API ключи →</a></div>' if not (has_seller_api and has_perf_api) else '') +
                '</div>')
 
     if user_tests:
