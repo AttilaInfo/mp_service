@@ -49,10 +49,9 @@ def init_rotation_columns():
                     ADD COLUMN IF NOT EXISTS last_rotated_at TIMESTAMP DEFAULT NOW(),
                     ADD COLUMN IF NOT EXISTS rotation_count  INTEGER DEFAULT 0
             """)
-            cur.execute("""
-                ALTER TABLE test_variants
-                    ADD COLUMN IF NOT EXISTS views_at_rotation INTEGER DEFAULT 0
-            """)
+            cur.execute("ALTER TABLE test_variants ADD COLUMN IF NOT EXISTS views_at_rotation INTEGER DEFAULT 0")
+            cur.execute("ALTER TABLE test_variants ADD COLUMN IF NOT EXISTS activated_at TIMESTAMP DEFAULT NOW()")
+            cur.execute("ALTER TABLE test_variants ADD COLUMN IF NOT EXISTS tocart INTEGER DEFAULT 0")
         conn.commit()
     log.info('Колонки ротации готовы')
 
@@ -443,14 +442,15 @@ def process_test(conn, test, key):
                 WHERE id=%s
             """, (nxt['id'],))
         conn.commit()
+        log.info(f'  Ротация применена: {cur_lbl} → {nxt["label"]}')
+        # Собираем статистику деактивируемого варианта
+        _collect_variant_stats(conn, test, key, cur_variant, variants)
         # Записываем время активации нового варианта
         try:
             import database as db_local
             db_local.activate_variant(test_id, nxt['label'])
         except Exception as e:
             log.warning(f'  activate_variant error: {e}')
-        # Обновляем статистику деактивированного варианта
-        _collect_variant_stats(conn, test, key, cur_variant, variants)
 
 
 def _apply_photo(test, key, variant, all_variants):
