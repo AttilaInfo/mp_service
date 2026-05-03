@@ -25,12 +25,24 @@ def tests():
 
     c = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem">'
     c += '<p class="ttl" style="margin:0">&#129514; Мои тесты</p>'
-    if active_key:
+    if active_key and db.get_perf_key(u['id']):
         c += '<a href="/tests/new" class="btn bp">&#43; Создать тест</a>'
+    elif active_key:
+        c += '<a href="/api-keys" class="btn" style="background:#fff3cd;border:1px solid #ffc107;color:#856404">&#128640; Подключить Performance API</a>'
     c += '</div>'
 
     if not active_key:
         c += alert('Сначала добавьте API ключ Озона чтобы создавать тесты. <a href="/api-keys" style="font-weight:700">Добавить</a>', 'wn')
+
+    perf_key = db.get_perf_key(u['id'])
+    if active_key and not perf_key:
+        c += ('<div style="background:#fff3cd;border:1px solid #ffe082;border-radius:12px;padding:1.2rem 1.5rem;margin-bottom:1.5rem;display:flex;justify-content:space-between;align-items:center;gap:1rem">'
+               '<div>'
+               '<p style="font-weight:700;color:#856404;margin-bottom:.3rem">&#128640; Для создания тестов нужен Performance API</p>'
+               '<p style="font-size:.9rem;color:#666">Подключите Performance API Озона — он нужен для получения точного CTR по рекламным кампаниям.</p>'
+               '</div>'
+               '<a href="/api-keys" class="btn bp" style="white-space:nowrap">Подключить →</a>'
+               '</div>')
 
     if user_tests:
         c += '<div class="box"><table>'
@@ -79,10 +91,8 @@ def new_test():
     if not active_keys:
         return redirect('/tests?err=Сначала+добавьте+API+ключ+Озона')
 
-    # Проверка Performance API
+    # Проверка Performance API — показываем предупреждение на странице тестов
     perf_key = db.get_perf_key(u['id'])
-    if not perf_key:
-        return redirect('/tests?err=Для+создания+теста+нужен+Performance+API.+Добавьте+его+в+разделе+API+ключи')
 
     err = request.args.get('err', '')
     shops_opts = ''.join(
