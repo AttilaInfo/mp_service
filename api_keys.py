@@ -163,17 +163,18 @@ def api_keys():
         '</form>'
     )
     c += '</div>'
-    c += ('<div id="cm" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);backdrop-filter:blur(2px);align-items:center;justify-content:center">'
-           '<div style="background:#fff;border-radius:16px;padding:2rem;width:340px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,.25)">'
-           '<p style="font-size:1.5rem;margin:0 0 .5rem">&#128465;</p>'
-           '<p style="font-weight:700;font-size:1.05rem;margin:0 0 .4rem" id="cm_t"></p>'
-           '<p style="font-size:.9rem;color:#666;margin:0 0 1.5rem" id="cm_s"></p>'
-           '<div style="display:flex;gap:.75rem;justify-content:flex-end">'
-           '<button onclick="closeCM()" style="background:#f0f2f5;border:1px solid #ddd;color:#444;border-radius:8px;padding:.5rem 1.2rem;cursor:pointer">Отмена</button>'
-           '<button id="cm_ok" style="background:#e53e3e;color:#fff;border:none;border-radius:8px;padding:.5rem 1.4rem;font-weight:600;cursor:pointer">Удалить</button>'
+    c += ('<div id="cm" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(15,15,30,.6);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:1rem">'
+           '<div style="background:#fff;border-radius:20px;padding:2rem 2rem 1.5rem;width:360px;max-width:100%;box-shadow:0 24px 80px rgba(0,0,0,.3);position:relative">'
+           '<div style="position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,#e53e3e,#fc8181);border-radius:20px 20px 0 0"></div>'
+           '<div style="width:52px;height:52px;border-radius:50%;background:#fff5f5;display:flex;align-items:center;justify-content:center;margin-bottom:1rem">'
+           '<span style="font-size:1.4rem">&#128465;</span></div>'
+           '<p style="font-weight:700;font-size:1.1rem;color:#1a1a2e;margin:0 0 .4rem" id="cm_t"></p>'
+           '<p style="font-size:.9rem;color:#888;margin:0 0 1.75rem;line-height:1.5" id="cm_s"></p>'
+           '<div style="display:flex;gap:.75rem">'
+           '<button onclick="closeCM()" style="flex:1;background:#f7f8fa;border:1.5px solid #e2e8f0;color:#555;border-radius:10px;padding:.6rem 1rem;cursor:pointer;font-size:.9rem;font-weight:500;transition:background .15s">Отмена</button>'
+           '<button id="cm_ok" style="flex:1;background:linear-gradient(135deg,#e53e3e,#c53030);color:#fff;border:none;border-radius:10px;padding:.6rem 1rem;font-weight:600;cursor:pointer;font-size:.9rem;box-shadow:0 4px 12px rgba(229,62,62,.35)">Удалить</button>'
            '</div></div></div>'
-           '<style>#cm>div{animation:cmIn .15s ease}'
-           '@keyframes cmIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}</style>'
+           '<style>#cm>div{animation:cmIn .2s cubic-bezier(.34,1.56,.64,1)}@keyframes cmIn{from{opacity:0;transform:scale(.88) translateY(12px)}to{opacity:1;transform:scale(1) translateY(0)}}#cm button:hover{opacity:.88}</style>'
            '<script>'
            'var _cmf=null;'
            'function showConfirm(f,t,s){'
@@ -211,6 +212,9 @@ def add_key():
         return redirect(f'/api-keys?err=Client+ID+должен+быть+числом&shop={shop}&cid={cid}')
     if len(akey) < 10:
         return redirect(f'/api-keys?err=API+Key+слишком+короткий&shop={shop}&cid={cid}')
+    existing = db.get_keys(u['id'])
+    if any(k['client_id'] == cid for k in existing):
+        return redirect(f'/api-keys?err=Магазин+с+таким+Client+ID+уже+добавлен&shop={shop}&cid={cid}')
     ok, msg = verify_ozon(cid, akey)
     db.add_key(u['id'], shop, cid, akey, akey[-4:], ok, msg)
     if ok:
