@@ -111,35 +111,45 @@ def api_keys():
         c += '<div class="empty"><p style="font-size:2rem">&#128273;</p><p style="margin-top:1rem">Нет добавленных ключей</p></div>'
 
     c += '</div>'
+
+
+    # ── Performance API ────────────────────────────────────────────────────
+    perf = db.get_perf_key(u['id'])
+    c += '<div class="box"><h2>&#128640; Performance API (для точного CTR)</h2>'
+    c += (
+        '<div class="tip" style="margin-bottom:1rem">'
+        'Performance API даёт точный CTR по каждому рекламному объявлению. '
+        'Нужен для тестирования фото с подключённой рекламной кампанией.<br>'
+        '<a href="https://seller.ozon.ru/app/settings/performance-api" target="_blank" '
+        'style="color:#1e40af;font-weight:600">Настройки → Performance API → Создать ключ</a>'
+        '</div>'
+    )
+    if perf:
+        perf_cid   = perf['client_id'][:50] + '...'
+        perf_added = str(perf['added_at'])[:10]
+        c += '<div style="background:#d4edda;border-radius:10px;padding:1rem;margin-bottom:1rem">'
+        c += '<div style="font-weight:700;color:#155724">&#10003; Performance API подключён</div>'
+        c += '<div style="font-size:.85rem;color:#444;margin-top:.3rem">Client ID: ' + perf_cid + '</div>'
+        c += '<div style="font-size:.8rem;color:#999">Добавлен: ' + perf_added + '</div>'
+        c += '<form method="POST" action="/api-keys/perf/del" style="margin-top:.8rem">'
+        c += '<button class="btn bd bs" onclick="return confirm(&apos;Удалить Performance API ключ?&apos;)">Удалить</button>'
+        c += '</form></div>'
+    else:
+        c += (
+            '<form method="POST" action="/api-keys/perf/add">'
+            '<div class="fg"><label>Client ID</label>'
+            '<input type="text" name="perf_client_id" class="fi" '
+            'placeholder="94436566-...@advertising.performance.ozon.ru" required maxlength="200">'
+            '<div class="hn">Формат: 12345-...@advertising.performance.ozon.ru</div></div>'
+            '<div class="fg"><label>Client Secret</label>'
+            '<input type="password" name="perf_client_secret" class="fi" '
+            'placeholder="Ваш Client Secret" required maxlength="300">'
+            '<div class="hn">Хранится безопасно</div></div>'
+            '<button class="btn bp">Сохранить Performance API ключ</button>'
+            '</form>'
+        )
+    c += '</div>'
     return render(c, 'keys')
-
-
-@api_keys_bp.route('/api-keys/add', methods=['POST'])
-def add_key():
-    u = me()
-    if not u:
-        return redirect('/login')
-
-    if db.count_keys(u['id']) >= MAX_API_KEYS:
-        return redirect('/api-keys?err=Достигнут+лимит+ключей')
-
-    shop = clean(request.form.get('shop', ''), 100)
-    cid  = clean(request.form.get('cid',  ''), 50)
-    akey = request.form.get('akey', '').strip()
-
-    if not shop or not cid or not akey:
-        return redirect(f'/api-keys?err=Заполните+все+поля&shop={shop}&cid={cid}')
-    if not cid.isdigit():
-        return redirect(f'/api-keys?err=Client+ID+должен+быть+числом&shop={shop}&cid={cid}')
-    if len(akey) < 10:
-        return redirect(f'/api-keys?err=API+Key+слишком+короткий&shop={shop}&cid={cid}')
-
-    ok, msg = verify_ozon(cid, akey)
-    db.add_key(u['id'], shop, cid, akey, akey[-4:], ok, msg)
-
-    if ok:
-        return redirect('/api-keys?msg=Магазин+' + shop + '+успешно+подключён')
-    return redirect('/api-keys?err=Ключ+добавлен+но+проверка:+' + msg.replace(' ', '+'))
 
 
 @api_keys_bp.route('/api-keys/recheck/<int:key_id>', methods=['POST'])
@@ -169,88 +179,42 @@ def test_key(key_id):
     u = me()
     if not u:
         return redirect('/login')
-
     keys = db.get_keys(u['id'])
     key = next((k for k in keys if k['id'] == key_id), None)
     if not key:
         return redirect('/api-keys?err=Ключ+не+найден')
-
     import requests as req
     from config import OZON_API_URL
-    headers = {
-        'Client-Id': key['client_id'],
-        'Api-Key':   key['api_key'],
-        'Content-Type': 'application/json'
-    }
-
+    headers = {'Client-Id': key['client_id'], 'Api-Key': key['api_key'], 'Content-Type': 'application/json'}
     results = []
-
-    # 1. Список товаров
     try:
-        r = req.post(f'{OZON_API_URL}/v3/product/list',
-            headers=headers,
-            json={'filter': {}, 'last_id': '', 'limit': 5},
-            timeout=8)
+        r = req.post(f'{OZON_API_URL}/v3/product/list', headers=headers, json={'filter': {}, 'last_id': '', 'limit': 5}, timeout=8)
         if r.status_code == 200:
-            data = r.json()
-            items = data.get('result', {}).get('items', [])
-            results.append(('✅ Товары', f'Найдено товаров в выборке: {len(items)}. ID: ' + ', '.join(str(x.get("product_id","?")) for x in items[:5])))
+            items = r.json().get('result', {}).get('items', [])
+            results.append(('✅ Товары', f'Найдено товаров в выборке: {len(items)}'))
         else:
             results.append(('⚠️ Товары', f'Статус {r.status_code}: {r.text[:200]}'))
     except Exception as e:
         results.append(('❌ Товары', str(e)[:200]))
-
-    # 2. Информация о складах
     try:
-        r = req.post(f'{OZON_API_URL}/v2/warehouse/list',
-            headers=headers, json={}, timeout=8)
+        r = req.post(f'{OZON_API_URL}/v2/warehouse/list', headers=headers, json={}, timeout=8)
         if r.status_code == 200:
             wh = r.json().get('result', [])
-            results.append(('✅ Склады', f'Найдено складов: {len(wh)}. ' + ', '.join(w.get("name","?") for w in wh[:3])))
+            results.append(('✅ Склады', f'Найдено складов: {len(wh)}'))
         else:
             results.append(('⚠️ Склады', f'Статус {r.status_code}: {r.text[:200]}'))
     except Exception as e:
         results.append(('❌ Склады', str(e)[:200]))
-
-    # 3. Аналитика (Report)
-    try:
-        from datetime import datetime, timedelta
-        date_to = datetime.now().strftime('%Y-%m-%d')
-        date_from = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
-        r = req.post(f'{OZON_API_URL}/v1/analytics/data',
-            headers=headers,
-            json={'date_from': date_from, 'date_to': date_to,
-                  'metrics': ['revenue', 'ordered_units'],
-                  'dimension': ['day'], 'limit': 7},
-            timeout=8)
-        if r.status_code == 200:
-            rows = r.json().get('result', {}).get('data', [])
-            results.append(('✅ Аналитика', f'Получено строк за 7 дней: {len(rows)}'))
-        else:
-            results.append(('⚠️ Аналитика', f'Статус {r.status_code}: {r.text[:200]}'))
-    except Exception as e:
-        results.append(('❌ Аналитика', str(e)[:200]))
-
-    # Рендерим результаты
     rows_html = ''
     for icon_title, detail in results:
         color = '#d4edda' if '✅' in icon_title else '#fff3cd' if '⚠️' in icon_title else '#f8d7da'
-        rows_html += (
-            f'<div style="background:{color};border-radius:10px;padding:1rem;margin-bottom:.8rem">'
-            f'<strong>{icon_title}</strong><br>'
-            f'<span style="font-size:.9rem;color:#444;margin-top:.3rem;display:block">{detail}</span>'
-            f'</div>'
-        )
-
-    from templates import render
+        rows_html += f'<div style="background:{color};border-radius:10px;padding:1rem;margin-bottom:.8rem"><strong>{icon_title}</strong><br><span style="font-size:.9rem;color:#444">{detail}</span></div>'
     c = (
         f'<p class="ttl">&#128270; Тест подключения — {key["shop_name"]}</p>'
         '<div class="box">'
         f'<p style="margin-bottom:1.2rem;color:#666">Client ID: <strong>{key["client_id"]}</strong></p>'
         + rows_html +
-        '<div style="margin-top:1.5rem">'
-        '<a href="/api-keys" class="btn bp">&#8592; Назад к ключам</a>'
-        '</div></div>'
+        '<div style="margin-top:1.5rem"><a href="/api-keys" class="btn bp">&#8592; Назад к ключам</a></div></div>'
     )
     return render(c, 'keys')
 
@@ -260,6 +224,40 @@ def delete_key(key_id):
     u = me()
     if not u:
         return redirect('/login')
-
     db.delete_key(key_id, u['id'])
     return redirect('/api-keys?msg=Подключение+удалено')
+
+
+@api_keys_bp.route('/api-keys/perf/add', methods=['POST'])
+def add_perf_key():
+    u = me()
+    if not u:
+        return redirect('/login')
+    client_id     = request.form.get('perf_client_id', '').strip()
+    client_secret = request.form.get('perf_client_secret', '').strip()
+    if not client_id or not client_secret:
+        return redirect('/api-keys?err=Заполните+оба+поля+Performance+API')
+    import requests as req
+    try:
+        r = req.post(
+            'https://api-performance.ozon.ru/api/client/token',
+            json={'client_id': client_id, 'client_secret': client_secret, 'grant_type': 'client_credentials'},
+            timeout=10
+        )
+        if r.status_code == 200 and r.json().get('access_token'):
+            db.save_perf_key(u['id'], client_id, client_secret)
+            return redirect('/api-keys?msg=Performance+API+успешно+подключён')
+        else:
+            err_text = r.text[:100].replace(' ', '+')
+            return redirect('/api-keys?err=Ошибка+Performance+API:+' + err_text)
+    except Exception as e:
+        return redirect('/api-keys?err=Ошибка+подключения:+' + str(e)[:80].replace(' ', '+'))
+
+
+@api_keys_bp.route('/api-keys/perf/del', methods=['POST'])
+def del_perf_key():
+    u = me()
+    if not u:
+        return redirect('/login')
+    db.delete_perf_key(u['id'])
+    return redirect('/api-keys?msg=Performance+API+ключ+удалён')
