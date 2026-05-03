@@ -587,6 +587,44 @@ def test_detail(test_id):
 
     c += '</div>'
 
+    # -- Рекламные кампании
+    perf_key = db.get_perf_key(u['id'])
+    campaign_ids = test.get('campaign_ids') or ''
+    selected_campaigns = [x.strip() for x in campaign_ids.split(',') if x.strip()]
+    if is_running:
+        if perf_key:
+            c += '<div class="box" style="margin-top:1.5rem">'
+            c += '<h3 style="margin-bottom:.8rem">&#128640; Рекламные кампании для точного CTR</h3>'
+            if selected_campaigns:
+                c += '<div style="background:#d4edda;border-radius:8px;padding:.8rem;margin-bottom:.8rem;font-size:.9rem">'
+                c += '&#10003; Подключено кампаний: <strong>' + str(len(selected_campaigns)) + '</strong> (ID: ' + ', '.join(selected_campaigns) + ')</div>'
+            c += '<p style="font-size:.85rem;color:#666;margin-bottom:.8rem">Выберите кампании для этого товара - CTR будет считаться из них.</p>'
+            c += '<div id="camp_list"><span style="color:#aaa;font-size:.9rem">Загрузка кампаний...</span></div>'
+            c += '<form method="POST" action="/tests/' + str(test_id) + '/campaigns" style="margin-top:.8rem">'
+            c += '<input type="hidden" id="camp_ids_input" name="campaign_ids" value="' + campaign_ids + '">'
+            c += '<button class="btn bp" style="font-size:.85rem;padding:.4rem .9rem">&#10003; Сохранить</button>'
+            c += '</form>'
+            camp_sku = test['sku']
+            sel_json = str(selected_campaigns).replace("'", '"')
+            c += '<script>'
+            c += 'fetch("/api/perf-campaigns?sku=' + camp_sku + '").then(function(r){return r.json();}).then(function(data){'
+            c += '  var el=document.getElementById("camp_list");'
+            c += '  var sel=' + sel_json + ';'
+            c += '  if(!data.campaigns||!data.campaigns.length){el.innerHTML="<span style=\\"color:#999\\">Нет активных кампаний</span>";return;}'
+            c += '  var html="";data.campaigns.forEach(function(camp){'
+            c += '    var chk=sel.indexOf(camp.id)>=0?"checked":"";'
+            c += '    html+="<label style=\\"display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;cursor:pointer\\"><input type=\\"checkbox\\" value=\\""+camp.id+"\\" "+chk+" onchange=\\"updC()\\" style=\\"accent-color:#667eea\\"> "+camp.name+" <span style=\\"color:#aaa;font-size:.78rem\\">(ID: "+camp.id+")</span></label>";'
+            c += '  });el.innerHTML=html;});'
+            c += 'function updC(){var ids=[];document.querySelectorAll("#camp_list input:checked").forEach(function(x){ids.push(x.value);});document.getElementById("camp_ids_input").value=ids.join(",");}'
+            c += '</script>'
+            c += '</div>'
+        else:
+            c += ('<div class="box" style="margin-top:1.5rem;background:#fff8e1;border:1px solid #ffe082">'
+                  '<p style="font-size:.9rem">&#128640; <strong>Хотите точный CTR?</strong> '
+                  '<a href="/api-keys" style="color:#1e40af;font-weight:600">Подключите Performance API</a> '
+                  'и выберите рекламную кампанию для этого теста.</p></div>')
+
+    # Кнопка завершения
     # Кнопка завершения
     if is_running:
         c += (
@@ -754,6 +792,72 @@ def delete_test(test_id):
     db.delete_test(test_id, u['id'])
     return redirect('/tests')
 
+
+
+@tests_bp.route('/api/perf-campaigns')
+def api_perf_campaigns():
+    """Возвращает список активных рекламных кампаний для выбранного SKU."""
+    u = me()
+    if not u:
+        return {'error': 'auth'}, 401
+
+    sku = request.args.get('sku', '').strip()
+    perf = db.get_perf_key(u['id'])
+    if not perf:
+        return {'campaigns': [], 'error': 'no_perf_key'}
+
+    import requests as req
+    try:
+        # Получаем токен
+        r = req.post(
+            'https://api-performance.ozon.ru/api/client/token',
+            json={
+                'client_id':     perf['client_id'],
+                'client_secret': perf['client_secret'],
+                'grant_type':    'client_credentials'
+            },
+            timeout=10
+        )
+        if r.status_code != 200:
+            return {'campaigns': [], 'error': f'token: {r.status_code}'}
+
+        token = r.json().get('access_token')
+        headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+
+        # Список активных кампаний
+        r2 = req.get(
+            'https://api-performance.ozon.ru/api/client/campaign',
+            headers=headers,
+            params={'state': 'CAMPAIGN_STATE_RUNNING'},
+            timeout=10
+        )
+        if r2.status_code != 200:
+            return {'campaigns': [], 'error': f'campaigns: {r2.status_code} {r2.text[:100]}'}
+
+        campaigns = r2.json().get('list', [])
+
+        # Если SKU задан — фильтруем кампании где есть этот товар
+        result = []
+        for camp in campaigns:
+            camp_id   = str(camp.get('id', ''))
+            camp_name = camp.get('title', '') or camp.get('name', '')
+            result.append({'id': camp_id, 'name': camp_name})
+
+        return {'campaigns': result}
+
+    except Exception as e:
+        return {'campaigns': [], 'error': str(e)[:100]}
+
+
+
+@tests_bp.route('/tests/<int:test_id>/campaigns', methods=['POST'])
+def save_campaigns(test_id):
+    u = me()
+    if not u:
+        return redirect('/login')
+    campaign_ids = request.form.get('campaign_ids', '').strip()
+    db.update_test_campaigns(test_id, u['id'], campaign_ids)
+    return redirect(f'/tests/{test_id}')
 
 # ── Вспомогательная функция форматирования стратегии ──────────────────────
 def format_strategy(strategy_str):
