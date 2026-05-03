@@ -37,17 +37,20 @@ def tests():
         c += '<tr><th>Товар</th><th>Магазин</th><th>Вариантов</th><th>Статус</th><th>Создан</th><th></th></tr>'
         for t in user_tests:
             status_badge = '<span class="bg g">Активен</span>' if t['status'] == 'running' else '<span class="bg r">Завершён</span>'
+            tid = str(t['id'])
             c += (
-                '<tr>'
+                '<tr onclick="location.href=\'/tests/' + tid + '\'" '
+                'style="cursor:pointer;transition:background .15s" '
+                'onmouseover="this.style.background=\'#f5f3ff\'" '
+                'onmouseout="this.style.background=\'\'">' 
                 '<td><strong>' + t['product_name'] + '</strong><br><small style="color:#999">SKU: ' + t['sku'] + '</small></td>'
                 '<td>' + t['shop_name'] + '</td>'
                 '<td style="text-align:center">' + str(t.get('variant_count', 0)) + '</td>'
                 '<td>' + status_badge + '</td>'
                 '<td>' + str(t['created_at'])[:10] + '</td>'
-                '<td style="display:flex;gap:.4rem;flex-wrap:wrap">'
-                '<a href="/tests/' + str(t['id']) + '" class="btn bp" style="padding:.4rem .9rem;font-size:.82rem">Подробнее</a>'
-                + (('<a href="/tests/' + str(t['id']) + '/edit" class="btn" style="padding:.4rem .9rem;font-size:.82rem;background:#fff3cd;border:1px solid #ffc107;color:#856404">&#9998; Изменить</a>') if t['status'] == 'running' else '') +
-                (('<form method="POST" action="/tests/' + str(t['id']) + '/delete" style="margin:0"><button class="btn bd" style="padding:.4rem .9rem;font-size:.82rem" onclick="return confirm(&apos;Удалить тест и все данные?&apos;)">&#128465; Удалить</button></form>') if t['status'] != 'running' else '') +
+                '<td style="display:flex;gap:.4rem;flex-wrap:wrap" onclick="event.stopPropagation()">'
+                + (('<a href="/tests/' + tid + '/edit" class="btn" style="padding:.4rem .9rem;font-size:.82rem;background:#fff3cd;border:1px solid #ffc107;color:#856404">&#9998; Изменить</a>') if t['status'] == 'running' else '') +
+                (('<form method="POST" action="/tests/' + tid + '/delete" style="margin:0"><button class="btn bd" style="padding:.4rem .9rem;font-size:.82rem" onclick="return confirm(&apos;Удалить тест и все данные?&apos;)">&#128465; Удалить</button></form>') if t['status'] != 'running' else '') +
                 '</td>'
                 '</tr>'
             )
