@@ -443,6 +443,7 @@ def test_detail(test_id):
     # Итоговые цифры
     total_views  = sum(v.get('views',  0) or 0 for v in variants)
     total_clicks = sum(v.get('clicks', 0) or 0 for v in variants)
+    total_sales  = sum(v.get('sales',  0) or 0 for v in variants)
     overall_ctr  = round(total_clicks / total_views * 100, 2) if total_views > 0 else 0.0
     max_ctr      = max((v['ctr_calc'] for v in variants), default=0) or 1
 
@@ -467,7 +468,7 @@ def test_detail(test_id):
         ('Вариантов',  str(len(variants)),              '&#127919;', '#667eea'),
         ('Показов',    f'{total_views:,}'.replace(',', ' '), '&#128065;', '#2196f3'),
         ('Кликов',     f'{total_clicks:,}'.replace(',', ' '), '&#128717;', '#27ae60'),
-        ('В корзину',  str(sum(v.get('tocart',0) or 0 for v in variants)), '&#128722;', '#ff9800'),
+        ('Продаж',     str(total_sales),                '&#128200;', '#ff9800'),
         ('Общий CTR',  str(overall_ctr) + '%',          '&#128202;', '#9c27b0'),
         ('Магазин',    test['shop_name'],                '&#127978;', '#607d8b'),
         ('Стратегия',  format_strategy(test.get('strategy', '')), '&#9201;', '#455a64'),
@@ -487,12 +488,13 @@ def test_detail(test_id):
     # Карточки вариантов
     c += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:1rem;margin-bottom:1.5rem">'
     for v in variants:
-        views  = v.get('views', 0) or 0
-        clicks = v.get('clicks', 0) or 0
-        tocart = v.get('tocart', 0) or 0
-        ctr    = v['ctr_calc']
+        views      = v.get('views', 0) or 0
+        clicks     = v.get('clicks', 0) or 0
+        sales      = v.get('sales', 0) or 0
+        conversion = v.get('conversion', 0) or 0
+        ctr        = v['ctr_calc']
         is_winner  = (v['label'] == best_label and ctr > 0)
-        is_current = (v['label'] == 'A')
+        is_current = (v['label'] == (test.get('current_variant') or 'A'))
         bar_w      = int(ctr / max_ctr * 100) if max_ctr > 0 else 0
 
         # Цвет акцента карточки
@@ -570,8 +572,8 @@ def test_detail(test_id):
             + '<div style="display:flex;flex-direction:column;gap:.25rem">'
             + mrow('&#128065;', 'Показы',    f'{views:,}'.replace(',', ' '))
             + mrow('&#128717;', 'Клики',     clicks)
-            + mrow('&#128722;', 'В корзину',  tocart)
-            + mrow('&#128200;', 'CTR',        str(ctr) + '%')
+            + mrow('&#128200;', 'Продажи',   sales)
+            + mrow('&#128260;', 'Конверсия', str(round(conversion * 100, 1)) + '%')
             + '</div>'
             # Кнопка паузы — только для активного теста
             + ((
