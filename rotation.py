@@ -339,7 +339,7 @@ def _collect_variant_stats(conn, test, key, variant, all_variants):
                 'date_from': date_from,
                 'date_to':   date_to,
                 'metrics':   ['hits_view_pdp', 'hits_tocart', 'revenue', 'ordered_units'],
-                'dimension': ['offer_id'],
+                'dimension': ['sku'],
                 'limit':     1000,
             },
             timeout=20
