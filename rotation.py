@@ -314,11 +314,14 @@ def weakest_variant(variants):
 def _collect_variant_stats(conn, test, key, variant, all_variants):
     """Запрашивает статистику из Озона за период активности варианта."""
     activated_at = variant.get('activated_at')
+    # Если activated_at пустой — используем дату создания теста как запасной вариант
+    if not activated_at:
+        activated_at = test.get('created_at')
     if not activated_at:
         return
     if isinstance(activated_at, str):
         try:
-            activated_at = datetime.fromisoformat(activated_at)
+            activated_at = datetime.fromisoformat(activated_at.replace('Z', ''))
         except Exception:
             return
 
