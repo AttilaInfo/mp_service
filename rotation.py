@@ -338,19 +338,26 @@ def _collect_variant_stats(conn, test, key, variant, all_variants):
             json={
                 'date_from': date_from,
                 'date_to':   date_to,
-                'metrics':   ['hits_view_pdp', 'hits_tocart'],
+                'metrics':   ['hits_view_pdp', 'hits_tocart', 'revenue', 'ordered_units'],
                 'dimension': ['day'],
                 'limit':     31,
             },
             timeout=20
         )
-        log.info(f'  analytics status={r.status_code} body={r.text[:200]}')
+        log.info(f'  analytics status={r.status_code} body={r.text[:400]}')
         if r.status_code == 200:
             rows = r.json().get('result', {}).get('data', [])
             if rows:
                 # Суммируем по всем дням периода
-                views  = sum(int(row.get('metrics', [0,0])[0]) for row in rows if row.get('metrics'))
-                tocart = sum(int(row.get('metrics', [0,0])[1]) for row in rows if len(row.get('metrics',[]))>1)
+                # hits_view_pdp=показы, hits_tocart=в корзину
+                # Если deprecated — падаем на ordered_units
+                m0 = rows[0].get('metrics', []) if rows else []
+                if len(m0) >= 4:
+                    views  = sum(int(row.get('metrics',[0])[0]) for row in rows if row.get('metrics'))
+                    tocart = sum(int(row.get('metrics',[0,0])[1]) for row in rows if len(row.get('metrics',[]))>1)
+                else:
+                    views  = sum(int(row.get('metrics',[0])[0]) for row in rows if row.get('metrics'))
+                    tocart = sum(int(row.get('metrics',[0,0])[1]) for row in rows if len(row.get('metrics',[]))>1)
                 clicks = tocart
                 n      = max(1, len([v for v in all_variants if not v.get('paused')]))
                 views_v  = views  // n
