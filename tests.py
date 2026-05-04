@@ -235,6 +235,9 @@ function loadCampaigns() {{
       }});
       el.innerHTML = html;
       document.getElementById('camp_section').style.borderColor = '#27ae60';
+      // Подсказка: выберите кампанию чтобы открылась загрузка фото
+      var vs = document.getElementById('variants_section');
+      // variants_section появится после выбора кампании (в updateCampSel)
     }})
     .catch(function(e) {{
       clearTimeout(timer);
@@ -250,15 +253,18 @@ function updateCampSel() {{
   document.querySelectorAll('#camp_status input:checked').forEach(function(x){{ ids.push(x.value); }});
   _selectedCamps = ids;
   document.getElementById('camp_ids_field').value = ids.join(',');
-  var btn = document.getElementById('submit_btn');
+  var btn  = document.getElementById('submit_btn');
   var hint = document.getElementById('submit_hint');
   if (ids.length > 0) {{
-    btn.disabled = false;
-    hint.style.display = 'none';
-    document.getElementById('camp_section').style.borderColor = '#667eea';
+    if (btn)  btn.disabled = false;
+    if (hint) hint.style.display = 'none';
+    document.getElementById('camp_section').style.borderColor = '#27ae60';
+    // Показываем блок загрузки фото
+    var vs = document.getElementById('variants_section');
+    if (vs) vs.style.display = '';
   }} else {{
-    btn.disabled = true;
-    hint.style.display = '';
+    if (btn)  btn.disabled = true;
+    if (hint) {{ hint.style.display = ''; }}
     document.getElementById('camp_section').style.borderColor = '#e74c3c';
   }}
 }}
@@ -1079,9 +1085,10 @@ def api_perf_campaigns():
                                 found = True
                                 break
                         include = found
-                    # Если objects пустой — значит кампания без конкретных товаров
-                    # (авто-таргетинг и т.п.) — включаем
-                else:
+                    else:
+                        # Пустой /objects = кампания-автотаргетинг без конкретных товаров
+                        # ("Продвижение в поиске — все товары") — исключаем
+                        include = False
                     # /objects не вернул 200 — не можем проверить, включаем
                     if len(debug_info['camps']) < 3:
                         debug_info['camps'][camp_id] = {'status': r3.status_code, 'body': r3.text[:100]}
