@@ -159,7 +159,7 @@ def new_test():
       &#128640; Рекламная кампания <span style="font-weight:400;font-size:.82rem;color:#888">(обязательно для точного CTR)</span>
     </label>
     <p style="font-size:.85rem;color:#666;margin:.6rem 0 1rem">
-      <span id="camp_desc_text">Загрузка кампаний...</span>
+      <span id="camp_desc_text"></span>
     </p>
     <div id="camp_status" style="margin-bottom:.8rem">
       <span style="color:#aaa;font-size:.9rem" id="camp_loading">&#128260; Загрузка кампаний...</span>
@@ -263,6 +263,7 @@ document.addEventListener('DOMContentLoaded', function() {{
   var skuField = document.getElementById('selected_sku');
   if (skuField) {{
     observer.observe(skuField, {{attributes: true, attributeFilter: ['value']}});
+    if (skuField.value) loadCampaigns();;
   }}
 }});
 </script>
@@ -759,7 +760,14 @@ def test_detail(test_id):
             c += '  var el=document.getElementById("camp_list");'
             c += '  var sel=' + sel_json + ';'
             c += '  if(!data.campaigns||!data.campaigns.length){'
-            c += '    el.innerHTML="<div style=\\\\\"background:#fff3cd;border-radius:8px;padding:.8rem;font-size:.88rem\\\\\">&#9888; Создайте рекламную кампанию в Озоне: Продвижение &rarr; Оплата за клик &rarr; Создать кампанию. Добавьте этот товар и нажмите Обновить список.</div>";'
+            c += '    el.innerHTML="<div style=\\\\\"background:#fff3cd;border:1px solid #ffe082;border-radius:8px;padding:.9rem;font-size:.9rem\\\\\">'
+            c += '      +\"<strong>&#9888; Рекламных кампаний с этим товаром не найдено</strong><br><br>\"'
+            c += '      +\"Для A/B тестирования нужна активная рекламная кампания с этим товаром.<br>\"'
+            c += '      +\"<a href=https://seller.ozon.ru/app/advertisement/product/cpc target=_blank style=color:#1e40af;font-weight:600>&#128640; Продвижение → Оплата за клик → Создать кампанию</a><br><br>\"'
+            c += '      +\"После создания нажмите <b>Обновить список кампаний</b>.\"'
+            c += '      +\"</div>\";'
+            c += '    return;}'
+            c += '      +"</div>";'
             c += '    document.getElementById(\\"camp_desc_text\\").textContent=\\"Рекламных кампаний с этим товаром пока нет. Создайте кампанию и нажмите Обновить список.\\";'
             c += '    return;}'
             c += '  var html="";data.campaigns.forEach(function(camp){'
