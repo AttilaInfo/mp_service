@@ -1042,42 +1042,58 @@ def api_perf_campaigns():
         except Exception as e:
             log.warning(f'product_id lookup failed: {e}')
 
-        # Шаг 2: фильтруем кампании по objects
+        # Шаг 2: фильтруем кампании по /objects
+        # Логика: fail-open — если /objects не работает, показываем кампанию.
+        # Исключаем только если /objects вернул 200 и товара там точно нет.
         result = []
-        debug_info = {'ozon_product_id': ozon_product_id, 'sample_objects': {}}
+        debug_info = {'ozon_product_id': ozon_product_id, 'camps': {}}
         for camp in campaigns:
             camp_id   = str(camp.get('id', ''))
             camp_name = camp.get('title', '') or camp.get('name', '')
+            include   = True   # по умолчанию включаем
             try:
                 r3 = req.get(
                     f'https://api-performance.ozon.ru/api/client/campaign/{camp_id}/objects',
                     headers=headers,
                     timeout=8
                 )
-                log.info(f'  camp {camp_id} /objects status={r3.status_code} body={r3.text[:200]}')
+                log.info(f'  camp {camp_id} /objects status={r3.status_code} body={r3.text[:300]}')
                 if r3.status_code == 200:
                     data3   = r3.json()
                     objects = (data3.get('list') or data3.get('items') or
                                (data3.get('result') or {}).get('items') or [])
-                    # Сохраняем для отладки первые 2 объекта первых 2 кампаний
-                    if len(debug_info['sample_objects']) < 2:
-                        debug_info['sample_objects'][camp_id] = objects[:2]
-                    for obj in objects:
-                        obj_id    = str(obj.get('id', ''))
-                        obj_offer = str(obj.get('offer_id', ''))
-                        obj_sku   = str(obj.get('sku', ''))
-                        obj_name  = str(obj.get('name', ''))
-                        # Совпадение: числовой product_id ИЛИ offer_id ИЛИ название
-                        match = sku in (obj_offer, obj_sku, obj_name)
-                        if ozon_product_id and not match:
-                            match = (ozon_product_id == obj_id)
-                        if match:
-                            result.append({'id': camp_id, 'name': camp_name})
-                            break
+                    if len(debug_info['camps']) < 3:
+                        debug_info['camps'][camp_id] = {'status': 200, 'count': len(objects), 'sample': objects[:2]}
+                    if objects:
+                        # Объекты получены — фильтруем по совпадению
+                        found = False
+                        for obj in objects:
+                            obj_id    = str(obj.get('id', ''))
+                            obj_offer = str(obj.get('offer_id', ''))
+                            obj_sku   = str(obj.get('sku', ''))
+                            obj_name  = str(obj.get('name', ''))
+                            match = sku in (obj_offer, obj_sku, obj_name)
+                            if ozon_product_id and not match:
+                                match = (ozon_product_id == obj_id)
+                            if match:
+                                found = True
+                                break
+                        include = found
+                    # Если objects пустой — значит кампания без конкретных товаров
+                    # (авто-таргетинг и т.п.) — включаем
+                else:
+                    # /objects не вернул 200 — не можем проверить, включаем
+                    if len(debug_info['camps']) < 3:
+                        debug_info['camps'][camp_id] = {'status': r3.status_code, 'body': r3.text[:100]}
             except Exception as e:
                 log.warning(f'  camp {camp_id} objects error: {e}')
+                if len(debug_info['camps']) < 3:
+                    debug_info['camps'][camp_id] = {'error': str(e)[:80]}
+                # Ошибка — не можем проверить, включаем
+            if include:
+                result.append({'id': camp_id, 'name': camp_name})
 
-        log.info(f'result campaigns: {result}')
+        log.info(f'result campaigns: {[r["name"] for r in result]}')
         return {'campaigns': result, '_debug': debug_info}
 
     except Exception as e:
