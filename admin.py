@@ -284,8 +284,13 @@ def admin_promocodes():
 
         '<div class="fg" style="margin:0">'
         '<label>Код</label>'
-        '<input type="text" name="code" class="fi" placeholder="LAUNCH2025" '
-        'style="text-transform:uppercase" required></div>'
+        '<div style="display:flex;gap:.4rem">'
+        '<input type="text" name="code" id="promo_code" class="fi" placeholder="LAUNCH2025" '
+        'style="text-transform:uppercase" required>'
+        '<button type="button" onclick="genCode()" '
+        'style="background:#667eea;color:#fff;border:none;border-radius:8px;'
+        'padding:.5rem .9rem;cursor:pointer;font-size:.82rem;white-space:nowrap">🎲 Сгенерировать</button>'
+        '</div></div>'
 
         '<div class="fg" style="margin:0">'
         '<label>Токены</label>'
@@ -313,6 +318,14 @@ def admin_promocodes():
         '</div>'
         '<button type="submit" class="btn bp">Создать промокод</button>'
         '</form>'
+        '<script>'
+        'function genCode(){'
+        '  var chars="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";'
+        '  var code="";'
+        '  for(var i=0;i<8;i++) code+=chars[Math.floor(Math.random()*chars.length)];'
+        '  document.getElementById("promo_code").value=code;'
+        '}'
+        '</script>'
         '</div>'
     )
 
