@@ -230,6 +230,7 @@ def nav_bar(active_page):
         ('/api-keys',  'keys',    'API ключи'),
         ('/billing',   'billing', '&#128176; Баланс'),
         ('/settings',  'cfg',     'Настройки'),
+        ('/admin',     'admin',   '🔧 Админ'),
     ]
     items = ''
     for url, pg, label in pages:

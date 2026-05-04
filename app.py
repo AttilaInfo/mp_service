@@ -14,6 +14,7 @@ from api       import api_bp
 from tests     import tests_bp
 from uploads   import uploads_bp
 from billing   import billing_bp
+from admin     import admin_bp
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
@@ -35,6 +36,7 @@ app.register_blueprint(api_bp)
 app.register_blueprint(tests_bp)
 app.register_blueprint(uploads_bp)
 app.register_blueprint(billing_bp)
+app.register_blueprint(admin_bp)
 
 # Создаём таблицы при старте
 if DATABASE_URL:
