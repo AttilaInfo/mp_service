@@ -228,6 +228,7 @@ def nav_bar(active_page):
         ('/dashboard', 'dash',    'Дашборд'),
         ('/tests',     'tests',   'Тесты'),
         ('/api-keys',  'keys',    'API ключи'),
+        ('/billing',   'billing', '&#128176; Баланс'),
         ('/settings',  'cfg',     'Настройки'),
     ]
     items = ''
