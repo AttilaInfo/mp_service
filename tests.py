@@ -115,13 +115,38 @@ def new_test():
     )
     err_html = f'<div class="al er">{err}</div>' if err else ''
 
-    html = f"""
-<div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem">
-  <a href="/tests" class="btn" style="background:#f0f2f5;border:1px solid #ddd;color:#444">&#8592; Назад</a>
-  <p class="ttl" style="margin:0">+ Новый A/B тест</p>
-</div>
-{err_html}
-<div class="box">
+    # Баланс токенов и стоимость теста
+    balance   = db.get_balance(u['id'])
+    service   = db.get_service('ab_test')
+    test_cost = service['token_cost'] if service else 500
+    enough    = balance >= test_cost
+    if enough:
+        balance_html = (
+            '<div style="background:#d4edda;border:1.5px solid #c3e6cb;border-radius:10px;'
+            'padding:.65rem 1rem;font-size:.88rem;margin-bottom:.75rem;'
+            'display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem">'
+            f'<span>&#128176; Баланс: <strong>{balance} токенов</strong></span>'
+            f'<span style="color:#666">Стоимость теста: <strong>{test_cost} токенов</strong></span>'
+            '</div>'
+        )
+    else:
+        balance_html = (
+            '<div class="al er" style="margin-bottom:.75rem">'
+            f'&#9888; Недостаточно токенов. Баланс: <strong>{balance}</strong>, нужно: <strong>{test_cost}</strong>. '
+            '<a href="/billing" style="color:#721c24;font-weight:700;text-decoration:underline">Пополнить баланс →</a>'
+            '</div>'
+        )
+
+    html = (
+        f'''<div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem">'''
+        '''<a href="/tests" class="btn" style="background:#f0f2f5;border:1px solid #ddd;color:#444">&#8592; Назад</a>'''
+        '''<p class="ttl" style="margin:0">+ Новый A/B тест</p></div>'''
+        + err_html
+        + balance_html
+        + '''<div class="box">'''
+    )
+    html += f"""
+
 <form method="POST" action="/tests/create" id="test_form">
   <div class="fg"><label>Магазин</label>
     <select name="key_id" class="fi" required>{shops_opts}</select>
@@ -577,8 +602,19 @@ def create_test():
     if not key:
         return redirect('/tests/new?err=Магазин+не+найден')
 
-    # ── ИСПРАВЛЕНИЕ 2: сохраняем в БД — убрана несуществующая переменная v ─
-    test_id      = db.create_test(u['id'], key['shop_name'], sku, product_name, strategy_str)
+    # ── Проверка баланса токенов ──────────────────────────────────────────
+    service   = db.get_service('ab_test')
+    test_cost = service['token_cost'] if service else 500
+    balance   = db.get_balance(u['id'])
+    if balance < test_cost:
+        return redirect(
+            f'/tests/new?err=Недостаточно+токенов.+Баланс:+{balance},+нужно:+{test_cost}.+'
+            f'Пополните+баланс'
+        )
+
+    # ── Создаём тест и списываем токены ───────────────────────────────────
+    test_id = db.create_test(u['id'], key['shop_name'], sku, product_name, strategy_str)
+    db.spend_tokens(u['id'], test_cost, f'Запуск A/B теста #{test_id} ({sku})')
     campaign_ids = request.form.get('campaign_ids', '').strip()
     if campaign_ids:
         db.update_test_campaigns(test_id, u['id'], campaign_ids)
