@@ -162,7 +162,7 @@ def new_test():
       <span id="camp_desc_text"></span>
     </p>
     <div id="camp_status" style="margin-bottom:.8rem">
-      <span style="color:#aaa;font-size:.9rem" id="camp_loading">&#128260; Загрузка кампаний...</span>
+      <span style="color:#aaa;font-size:.9rem">&#128269; Выберите товар выше — список кампаний загрузится автоматически</span>
     </div>
     <input type="hidden" name="campaign_ids" id="camp_ids_field" value="">
     <div style="display:flex;gap:.5rem;align-items:center;margin-top:.5rem">
@@ -184,10 +184,11 @@ def new_test():
 var _selectedCamps = [];
 
 function loadCampaigns() {{
-  var skuEl = document.getElementById('selected_sku');
-  var sku = skuEl ? skuEl.value : '';
+  // product_val хранит "sku|название товара" — парсим SKU
+  var prodEl = document.getElementById('product_val');
+  var sku = prodEl && prodEl.value ? prodEl.value.split('|')[0].trim() : '';
   if (!sku) {{
-    document.getElementById('camp_status').innerHTML = '<span style="color:#aaa;font-size:.9rem">Сначала выберите товар</span>';
+    document.getElementById('camp_status').innerHTML = '<span style="color:#aaa;font-size:.9rem">&#128269; Выберите товар выше — список кампаний загрузится автоматически</span>';
     return;
   }}
   document.getElementById('camp_status').innerHTML = '<span style="color:#aaa;font-size:.9rem">&#9203; Загрузка кампаний...</span>';
@@ -265,18 +266,19 @@ function updateCampSel() {{
 
 // Загружаем кампании автоматически когда выбран товар
 document.addEventListener('DOMContentLoaded', function() {{
-  // Следим за выбором товара через polling
-  var _lastSku = '';
+  // Следим за product_val через polling (product-search.js пишет туда "sku|название")
+  var _lastProdVal = '';
   setInterval(function() {{
-    var skuField = document.getElementById('selected_sku');
-    if (skuField && skuField.value && skuField.value !== _lastSku) {{
-      _lastSku = skuField.value;
+    var prodField = document.getElementById('product_val');
+    var val = prodField ? prodField.value : '';
+    if (val && val !== _lastProdVal) {{
+      _lastProdVal = val;
       loadCampaigns();
     }}
   }}, 500);
-  var skuField = document.getElementById('selected_sku');
-  if (skuField) {{
-    if (skuField.value) loadCampaigns();;
+  // Если товар уже выбран при загрузке страницы
+  var prodField = document.getElementById('product_val');
+  if (prodField && prodField.value) loadCampaigns();
   }}
 }});
 </script>
