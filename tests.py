@@ -187,15 +187,17 @@ function loadCampaigns() {{
   var skuEl = document.getElementById('selected_sku');
   var sku = skuEl ? skuEl.value : '';
   if (!sku) {{
-    document.getElementById('camp_loading').textContent = 'Сначала выберите товар';
+    document.getElementById('camp_status').innerHTML = '<span style="color:#aaa;font-size:.9rem">Сначала выберите товар</span>';
     return;
   }}
-  document.getElementById('camp_loading').style.display = '';
-  document.getElementById('camp_loading').textContent = '&#128260; Загрузка кампаний...';
-  document.getElementById('camp_status').innerHTML = '<span style="color:#aaa;font-size:.9rem" id="camp_loading">&#128260; Загрузка кампаний...</span>';
+  document.getElementById('camp_status').innerHTML = '<span style="color:#aaa;font-size:.9rem">&#9203; Загрузка кампаний...</span>';
 
-  fetch('/api/perf-campaigns?sku=' + encodeURIComponent(sku))
-    .then(function(r){{ return r.json(); }})
+  // Таймаут 15 секунд — если Railway блокирует запрос, не зависаем вечно
+  var controller = new AbortController();
+  var timer = setTimeout(function(){{ controller.abort(); }}, 15000);
+
+  fetch('/api/perf-campaigns?sku=' + encodeURIComponent(sku), {{signal: controller.signal}})
+    .then(function(r){{ clearTimeout(timer); return r.json(); }})
     .then(function(data) {{
       var el = document.getElementById('camp_status');
       if (data.error === 'no_perf_key') {{
@@ -207,16 +209,20 @@ function loadCampaigns() {{
       }}
       document.getElementById('no_perf_warning').style.display = 'none';
 
-      // Фильтруем кампании где участвует наш товар
       var camps = data.campaigns || [];
       if (!camps.length) {{
-        el.innerHTML = '<div style="background:#fff3cd;border-radius:8px;padding:.8rem;font-size:.88rem">'
-          + '&#9888; Активных рекламных кампаний с этим товаром не найдено.<br>'
-          + '<strong>Создайте кампанию</strong> в Озоне → Продвижение → Реклама → Оплата за клик, '
-          + 'добавьте этот товар и вернитесь. Затем нажмите «Обновить список».</div>';
+        el.innerHTML = '<div style="background:#fff8e1;border:1.5px solid #ffc107;border-radius:10px;padding:1rem 1.1rem;line-height:1.6">'
+          + '<p style="font-weight:700;color:#856404;margin:0 0 .5rem;font-size:.95rem">&#9888; Рекламная кампания не найдена</p>'
+          + '<p style="color:#555;font-size:.88rem;margin:0 0 .7rem">Для A/B тестирования необходима работающая рекламная кампания на этот товар — без неё мы не сможем отслеживать точный CTR.</p>'
+          + '<a href="https://seller.ozon.ru/app/advertisement/product/cpc" target="_blank" rel="noopener" '
+          + 'style="display:inline-flex;align-items:center;gap:.45rem;background:#667eea;color:#fff;border-radius:8px;padding:.5rem 1.1rem;font-weight:600;text-decoration:none;font-size:.88rem">'
+          + '&#128640; Создать рекламную кампанию в Озоне &#8594;</a>'
+          + '<p style="margin:.7rem 0 0;font-size:.8rem;color:#999">Озон → Продвижение → Оплата за клик → Создать кампанию. После создания вернитесь и нажмите «Обновить список кампаний».</p>'
+          + '</div>';
         document.getElementById('submit_btn').disabled = true;
+        document.getElementById('submit_hint').textContent = 'Создайте рекламную кампанию и обновите список';
         document.getElementById('submit_hint').style.display = '';
-        document.getElementById('camp_section').style.borderColor = '#e74c3c';
+        document.getElementById('camp_section').style.borderColor = '#ffc107';
         return;
       }}
 
@@ -228,10 +234,14 @@ function loadCampaigns() {{
           + ' <span style="color:#aaa;font-size:.78rem">(ID: ' + c.id + ')</span></label>';
       }});
       el.innerHTML = html;
-      document.getElementById('camp_section').style.borderColor = '#ddd';
+      document.getElementById('camp_section').style.borderColor = '#27ae60';
     }})
-    .catch(function() {{
-      document.getElementById('camp_status').innerHTML = '<span style="color:#e74c3c;font-size:.9rem">&#10060; Ошибка загрузки. Попробуйте ещё раз.</span>';
+    .catch(function(e) {{
+      clearTimeout(timer);
+      var msg = (e.name === 'AbortError') ? 'Превышено время ожидания (15 сек).' : 'Ошибка соединения.';
+      document.getElementById('camp_status').innerHTML = '<div style="background:#f8d7da;border-radius:8px;padding:.8rem;font-size:.88rem;color:#721c24">'
+        + '&#10060; ' + msg + ' '
+        + '<button type="button" onclick="loadCampaigns()" style="background:none;border:none;color:#1e40af;cursor:pointer;font-weight:600;font-size:.88rem;text-decoration:underline;padding:0">Попробовать ещё раз</button></div>';
     }});
 }}
 
