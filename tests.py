@@ -1051,15 +1051,35 @@ def api_perf_campaigns():
                     elif 'items' in rj:
                         items = rj['items']
                     log.info(f'items from info/list: {items[:3]}')
-                    # Собираем ВСЕ product_id этого offer_id (FBO, FBS могут иметь разные ID)
-                    all_product_ids = set()
+                    # Собираем ВСЕ product_id этого offer_id
                     for item in items:
                         for key in ('id', 'product_id', 'fbo_sku', 'fbs_sku'):
                             v = item.get(key)
                             if v:
                                 all_product_ids.add(str(v))
+                        # Запрашиваем детали чтобы получить FBO и все source SKU
+                        main_id = item.get('id') or item.get('product_id')
+                        if main_id:
+                            try:
+                                rdet = req.post(
+                                    'https://api-seller.ozon.ru/v2/product/info',
+                                    headers=seller_hdrs,
+                                    json={'product_id': int(main_id)},
+                                    timeout=8
+                                )
+                                if rdet.status_code == 200:
+                                    det = rdet.json().get('result') or {}
+                                    log.info(f'product/info: {str(det)[:300]}')
+                                    for key in ('id', 'fbo_sku', 'fbs_sku', 'sku'):
+                                        v = det.get(key)
+                                        if v: all_product_ids.add(str(v))
+                                    for src in det.get('sources', []):
+                                        v = src.get('sku')
+                                        if v: all_product_ids.add(str(v))
+                            except Exception as det_e:
+                                log.warning(f'product/info error: {det_e}')
                     if all_product_ids:
-                        ozon_product_id = next(iter(all_product_ids))  # для обратной совместимости
+                        ozon_product_id = next(iter(all_product_ids))
                 # Запасной вариант: v2/product/list
                 if not all_product_ids:
                     all_product_ids = set()
