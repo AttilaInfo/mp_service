@@ -1034,41 +1034,25 @@ def api_perf_campaigns():
                     'Api-Key':      active_key['api_key'],
                     'Content-Type': 'application/json',
                 }
-                # Шаг 1а: получаем product_id через v2/product/list
-                rlist = req.post(
-                    'https://api-seller.ozon.ru/v2/product/list',
+                # v3/product/info/list — возвращает id, fbo_sku, fbs_sku
+                rp = req.post(
+                    'https://api-seller.ozon.ru/v3/product/info/list',
                     headers=seller_hdrs,
-                    json={'filter': {'offer_id': [sku]}, 'limit': 10},
+                    json={'offer_id': [sku]},
                     timeout=10
                 )
-                log.info(f'product/list: {rlist.status_code} {rlist.text[:300]}')
-                product_ids_to_check = []
-                if rlist.status_code == 200:
-                    items_list = (rlist.json().get('result') or {}).get('items') or []
-                    for item in items_list:
-                        pid = item.get('product_id') or item.get('id')
-                        if pid:
-                            product_ids_to_check.append(int(pid))
-                            all_product_ids.add(str(pid))
-
-                # Шаг 1б: для каждого product_id запрашиваем полные данные (FBO + FBS sku)
-                for pid in product_ids_to_check:
-                    rinfo = req.post(
-                        'https://api-seller.ozon.ru/v2/product/info',
-                        headers=seller_hdrs,
-                        json={'product_id': pid},
-                        timeout=8
-                    )
-                    log.info(f'product/info {pid}: {rinfo.status_code} {rinfo.text[:400]}')
-                    if rinfo.status_code == 200:
-                        det = rinfo.json().get('result') or {}
-                        # Прямые поля
-                        for key in ('id', 'fbo_sku', 'fbs_sku', 'sku'):
-                            v = det.get(key)
-                            if v: all_product_ids.add(str(v))
-                        # sources — все склады
-                        for src in (det.get('sources') or []):
-                            v = src.get('sku') or src.get('product_id')
+                log.info(f'info/list {rp.status_code}: {rp.text[:600]}')
+                if rp.status_code == 200:
+                    rj = rp.json()
+                    items = []
+                    if 'result' in rj:
+                        items = rj['result'].get('items') or []
+                    elif 'items' in rj:
+                        items = rj['items']
+                    for item in items:
+                        log.info(f'item keys: {list(item.keys())} values: {item}')
+                        for key in ('id', 'product_id', 'fbo_sku', 'fbs_sku', 'sku'):
+                            v = item.get(key)
                             if v: all_product_ids.add(str(v))
 
                 if all_product_ids:
