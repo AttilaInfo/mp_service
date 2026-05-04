@@ -1044,6 +1044,7 @@ def api_perf_campaigns():
 
         # Шаг 2: фильтруем кампании по objects
         result = []
+        debug_info = {'ozon_product_id': ozon_product_id, 'sample_objects': {}}
         for camp in campaigns:
             camp_id   = str(camp.get('id', ''))
             camp_name = camp.get('title', '') or camp.get('name', '')
@@ -1058,6 +1059,9 @@ def api_perf_campaigns():
                     data3   = r3.json()
                     objects = (data3.get('list') or data3.get('items') or
                                (data3.get('result') or {}).get('items') or [])
+                    # Сохраняем для отладки первые 2 объекта первых 2 кампаний
+                    if len(debug_info['sample_objects']) < 2:
+                        debug_info['sample_objects'][camp_id] = objects[:2]
                     for obj in objects:
                         obj_id    = str(obj.get('id', ''))
                         obj_offer = str(obj.get('offer_id', ''))
@@ -1074,7 +1078,7 @@ def api_perf_campaigns():
                 log.warning(f'  camp {camp_id} objects error: {e}')
 
         log.info(f'result campaigns: {result}')
-        return {'campaigns': result}
+        return {'campaigns': result, '_debug': debug_info}
 
     except Exception as e:
         return {'campaigns': [], 'error': str(e)[:100]}
