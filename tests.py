@@ -178,8 +178,6 @@ def new_test():
     <a href="/api-keys" style="color:#1e40af;font-weight:600">Подключите его в разделе API ключи</a> и вернитесь.</p>
   </div>
 
-</form>
-
 <script>
 var _selectedCamps = [];
 
@@ -419,6 +417,8 @@ document.addEventListener('DOMContentLoaded', function() {{
       &#128640; Запустить тест
     </button>
   </div>
+
+</form>
 
   <script>
   var PRESETS = {{ '1h': 60, '4h': 240, '1d': 1440, '1w': 10080 }};
