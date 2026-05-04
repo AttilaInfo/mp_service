@@ -1,6 +1,7 @@
 from flask import Blueprint, redirect
 from templates import LANDING_CSS
 from auth import me
+import database as db
 
 landing_bp = Blueprint('landing', __name__)
 
@@ -9,6 +10,11 @@ landing_bp = Blueprint('landing', __name__)
 def landing():
     if me():
         return redirect('/dashboard')
+
+    # Получаем цену теста из БД
+    service   = db.get_service('ab_test')
+    test_cost = service['token_cost'] if service else 500
+    free_tests = 1000 // test_cost
 
     html = (
         '<!DOCTYPE html><html lang="ru"><head>'
@@ -84,10 +90,12 @@ def landing():
         '<h2 class="section-h">Начните бесплатно</h2>'
         '<div class="price-card">'
         '<div class="price-badge">&#127381; Специальное предложение</div>'
-        '<div class="price-badge">&#127381; При регистрации — 2 теста бесплатно</div>''<div class="price-tag">500 &#8381; <span>/ 1 тест</span></div>'
-        '<p class="price-sub">При регистрации вы получаете <strong>1 000 токенов бесплатно</strong> — это 2 теста. Затем платите только за использование.</p>'
+        '<div class="price-badge">&#127381; При регистрации — 2 теста бесплатно</div>'
+        f'<div class="price-tag">{test_cost} &#8381; <span>/ 1 тест</span></div>'
+        f'<p class="price-sub">При регистрации вы получаете <strong>1 000 токенов бесплатно</strong> — это {free_tests} теста. Затем платите только за использование.</p>'
         '<ul class="price-features">'
-        '<li><span class="check-ic">&#127381;</span> <strong>1 000 токенов бесплатно</strong> при регистрации (2 теста)</li>''<li><span class="check-ic">&#10003;</span> Далее: 1 тест = 500 токенов = 500&#8381;</li>'
+        f'<li><span class="check-ic">&#127381;</span> <strong>1 000 токенов бесплатно</strong> при регистрации ({free_tests} теста)</li>'
+        f'<li><span class="check-ic">&#10003;</span> Далее: 1 тест = {test_cost} токенов = {test_cost}&#8381;</li>'
         '<li><span class="check-ic">&#10003;</span> До 10 вариантов фото в одном тесте</li>'
         '<li><span class="check-ic">&#10003;</span> Автоматическая ротация и аналитика</li>'
         '<li><span class="check-ic">&#10003;</span> Токены зачисляются мгновенно после оплаты</li>'
