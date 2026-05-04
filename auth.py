@@ -93,6 +93,8 @@ def register():
         else:
             user_id = db.create_user(saved_email, saved_name, hash_pw(pw))
             session['user_id'] = user_id
+            # Приветственный бонус — 1000 токенов = 2 теста бесплатно
+            db.add_tokens(user_id, 1000, 'promo', 'Приветственный бонус: 2 теста бесплатно')
             return redirect('/dashboard')
 
     name_val  = ' value="' + saved_name  + '"' if saved_name  else ''
