@@ -1008,39 +1008,72 @@ def api_perf_campaigns():
 
         campaigns = r2.json().get('list', [])
 
-        # Фильтруем кампании: проверяем объекты каждой кампании на наличие нашего товара
+        if not sku:
+            return {'campaigns': [
+                {'id': str(c.get('id','')), 'name': c.get('title','') or c.get('name','')}
+                for c in campaigns
+            ]}
+
+        # Шаг 1: получаем числовой product_id через Seller API (offer_id → product_id)
+        ozon_product_id = None
+        import logging
+        log = logging.getLogger('perf_campaigns')
+        try:
+            seller_keys = db.get_keys(u['id'])
+            active_key  = next((k for k in seller_keys if k['active']), None)
+            if active_key:
+                seller_hdrs = {
+                    'Client-Id':    active_key['client_id'],
+                    'Api-Key':      active_key['api_key'],
+                    'Content-Type': 'application/json',
+                }
+                rp = req.post(
+                    'https://api-seller.ozon.ru/v3/product/info/list',
+                    headers=seller_hdrs,
+                    json={'offer_id': [sku]},
+                    timeout=10
+                )
+                log.info(f'product/info/list status={rp.status_code} body={rp.text[:300]}')
+                if rp.status_code == 200:
+                    items = (rp.json().get('result') or {}).get('items') or []
+                    if items:
+                        ozon_product_id = str(items[0].get('id') or items[0].get('product_id') or '')
+                        log.info(f'ozon_product_id={ozon_product_id}')
+        except Exception as e:
+            log.warning(f'product_id lookup failed: {e}')
+
+        # Шаг 2: фильтруем кампании по objects
         result = []
         for camp in campaigns:
             camp_id   = str(camp.get('id', ''))
             camp_name = camp.get('title', '') or camp.get('name', '')
-
-            if not sku:
-                result.append({'id': camp_id, 'name': camp_name})
-                continue
-
             try:
                 r3 = req.get(
                     f'https://api-performance.ozon.ru/api/client/campaign/{camp_id}/objects',
                     headers=headers,
                     timeout=8
                 )
+                log.info(f'  camp {camp_id} /objects status={r3.status_code} body={r3.text[:200]}')
                 if r3.status_code == 200:
                     data3   = r3.json()
                     objects = (data3.get('list') or data3.get('items') or
                                (data3.get('result') or {}).get('items') or [])
                     for obj in objects:
-                        if sku in (
-                            str(obj.get('id', '')),
-                            str(obj.get('offer_id', '')),
-                            str(obj.get('name', '')),
-                            str(obj.get('sku', '')),
-                        ):
+                        obj_id    = str(obj.get('id', ''))
+                        obj_offer = str(obj.get('offer_id', ''))
+                        obj_sku   = str(obj.get('sku', ''))
+                        obj_name  = str(obj.get('name', ''))
+                        # Совпадение: числовой product_id ИЛИ offer_id ИЛИ название
+                        match = sku in (obj_offer, obj_sku, obj_name)
+                        if ozon_product_id and not match:
+                            match = (ozon_product_id == obj_id)
+                        if match:
                             result.append({'id': camp_id, 'name': camp_name})
                             break
-                # Если /objects не отвечает — пропускаем кампанию
-            except Exception:
-                pass
+            except Exception as e:
+                log.warning(f'  camp {camp_id} objects error: {e}')
 
+        log.info(f'result campaigns: {result}')
         return {'campaigns': result}
 
     except Exception as e:
