@@ -411,6 +411,15 @@ document.addEventListener('DOMContentLoaded', function() {{
     </div>
   </div>
 
+  <!-- Кнопка запуска -->
+  <div style="margin-top:1.5rem">
+    <p id="submit_hint" style="display:none;color:#e74c3c;font-size:.88rem;margin-bottom:.5rem;text-align:center"></p>
+    <button type="submit" id="submit_btn" class="btn bp"
+      style="width:100%;padding:.85rem;font-size:1rem;font-weight:700;border-radius:12px">
+      &#128640; Запустить тест
+    </button>
+  </div>
+
   <script>
   var PRESETS = {{ '1h': 60, '4h': 240, '1d': 1440, '1w': 10080 }};
 
