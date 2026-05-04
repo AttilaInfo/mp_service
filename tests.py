@@ -120,6 +120,9 @@ def new_test():
     service   = db.get_service('ab_test')
     test_cost = service['token_cost'] if service else 500
     enough    = balance >= test_cost
+    # Если баланс недостаточен — скрываем err_html (balance_html уже показывает проблему)
+    if not enough:
+        err = ''
     if enough:
         balance_html = (
             '<div style="background:#d4edda;border:1.5px solid #c3e6cb;border-radius:10px;'
