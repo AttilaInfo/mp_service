@@ -279,7 +279,6 @@ document.addEventListener('DOMContentLoaded', function() {{
   // Если товар уже выбран при загрузке страницы
   var prodField = document.getElementById('product_val');
   if (prodField && prodField.value) loadCampaigns();
-  }}
 }});
 </script>
 
