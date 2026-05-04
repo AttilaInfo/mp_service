@@ -638,6 +638,8 @@ def test_detail(test_id):
     )
 
     # Инфо-плашки
+    campaign_ids_str = test.get('campaign_ids') or ''
+    camp_short = ('ID: ' + campaign_ids_str[:20]) if campaign_ids_str else 'Не выбрана'
     info_items = [
         ('Вариантов',  str(len(variants)),              '&#127919;', '#667eea'),
         ('Показов',    f'{total_views:,}'.replace(',', ' '), '&#128065;', '#2196f3'),
@@ -647,13 +649,14 @@ def test_detail(test_id):
         ('Магазин',    test['shop_name'],                '&#127978;', '#607d8b'),
         ('Стратегия',  format_strategy(test.get('strategy', '')), '&#9201;', '#455a64'),
         ('Запущен',    str(test['created_at'])[:10],    '&#128197;', '#795548'),
+        ('Реклама',    camp_short,                      '&#128640;', '#e91e8c'),
     ]
     c += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:.6rem;margin-bottom:1.75rem">'
     for lbl, val, icon, clr in info_items:
         c += (
             '<div style="background:#fff;border:1.5px solid #eee;border-radius:10px;padding:.7rem .85rem">'
             '<div style="font-size:.7rem;color:#aaa;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.25rem">' + lbl + '</div>'
-            '<div style="font-size:.95rem;font-weight:700;color:' + clr + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + str(val) + '">'
+            '<div style="font-size:.95rem;font-weight:700;color:' + clr + ';word-break:break-word;line-height:1.3">'
             + icon + ' ' + str(val) + '</div>'
             '</div>'
         )
@@ -768,48 +771,63 @@ def test_detail(test_id):
     selected_campaigns = [x.strip() for x in campaign_ids.split(',') if x.strip()]
     if is_running:
         if perf_key:
-            c += '<div class="box" style="margin-top:1.5rem">'
-            c += '<h3 style="margin-bottom:.8rem">&#128640; Рекламные кампании для точного CTR</h3>'
-            if selected_campaigns:
-                c += '<div style="background:#d4edda;border-radius:8px;padding:.8rem;margin-bottom:.8rem;font-size:.9rem">'
-                c += '&#10003; Подключено кампаний: <strong>' + str(len(selected_campaigns)) + '</strong> (ID: ' + ', '.join(selected_campaigns) + ')</div>'
-            c += '<p style="font-size:.85rem;color:#666;margin-bottom:.8rem">Выберите кампании для этого товара - CTR будет считаться из них.</p>'
-            c += '<div id="camp_list"><span style="color:#aaa;font-size:.9rem">Загрузка кампаний...</span></div>'
-            c += '<form method="POST" action="/tests/' + str(test_id) + '/campaigns" style="margin-top:.8rem">'
-            c += '<input type="hidden" id="camp_ids_input" name="campaign_ids" value="' + campaign_ids + '">'
-            c += '<button class="btn bp" style="font-size:.85rem;padding:.4rem .9rem">&#10003; Сохранить</button>'
-            c += '</form>'
             camp_sku = test['sku']
             sel_json = str(selected_campaigns).replace("'", '"')
-            c += '<script>'
-            c += 'fetch("/api/perf-campaigns?sku=' + camp_sku + '").then(function(r){return r.json();}).then(function(data){'
-            c += '  var el=document.getElementById("camp_list");'
-            c += '  var sel=' + sel_json + ';'
-            c += '  if(!data.campaigns||!data.campaigns.length){'
-            c += '    el.innerHTML="<div style=\\\\\"background:#fff3cd;border:1px solid #ffe082;border-radius:8px;padding:.9rem;font-size:.9rem\\\\\">'
-            c += '      +\"<strong>&#9888; Рекламных кампаний с этим товаром не найдено</strong><br><br>\"'
-            c += '      +\"Для A/B тестирования нужна активная рекламная кампания с этим товаром.<br>\"'
-            c += '      +\"<a href=https://seller.ozon.ru/app/advertisement/product/cpc target=_blank style=color:#1e40af;font-weight:600>&#128640; Продвижение → Оплата за клик → Создать кампанию</a><br><br>\"'
-            c += '      +\"После создания нажмите <b>Обновить список кампаний</b>.\"'
-            c += '      +\"</div>\";'
-            c += '    return;}'
-            c += '      +"</div>";'
-            c += '    document.getElementById(\\"camp_desc_text\\").textContent=\\"Рекламных кампаний с этим товаром пока нет. Создайте кампанию и нажмите Обновить список.\\";'
-            c += '    return;}'
-            c += '  var html="";data.campaigns.forEach(function(camp){'
-            c += '    var chk=sel.indexOf(camp.id)>=0?"checked":"";'
-            c += '    html+="<label style=\\"display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;cursor:pointer\\"><input type=\\"checkbox\\" value=\\""+camp.id+"\\" "+chk+" onchange=\\"updC()\\" style=\\"accent-color:#667eea\\"> "+camp.name+" <span style=\\"color:#aaa;font-size:.78rem\\">(ID: "+camp.id+")</span></label>";'
-            c += '  });el.innerHTML=html;'
-            c += '  document.getElementById(\\"camp_desc_text\\").textContent=\\"Выберите кампанию — CTR будет считаться из неё. Рекомендуем: один товар в одной кампании.\\";'
-            c += '});'
-            c += 'function updC(){var ids=[];document.querySelectorAll("#camp_list input:checked").forEach(function(x){ids.push(x.value);});document.getElementById("camp_ids_input").value=ids.join(",");}'
-            c += '</script>'
-            c += '</div>'
+            c += (
+                '<div class="box" style="margin-top:1.5rem">'
+                '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:.75rem">'
+                '<h3 style="margin:0">&#128640; Рекламные кампании для точного CTR</h3>'
+                '<button type="button" onclick="var s=document.getElementById(\'camp_edit\');s.style.display=s.style.display===\'none\'?\'block\':\'none\'" '
+                'style="background:#f0f2f5;border:1px solid #ddd;border-radius:8px;padding:.3rem .8rem;cursor:pointer;font-size:.82rem;color:#444">&#9998; Изменить</button>'
+                '</div>'
+            )
+            if selected_campaigns:
+                c += ('<div style="background:#d4edda;border-radius:8px;padding:.65rem .9rem;font-size:.88rem;margin-bottom:.5rem">'
+                      '&#10003; Подключено: <strong>' + ', '.join(selected_campaigns) + '</strong></div>')
+            else:
+                c += '<div style="background:#fff3cd;border-radius:8px;padding:.65rem .9rem;font-size:.88rem;margin-bottom:.5rem">&#9888; Кампания не выбрана — CTR считается приближённо</div>'
+
+            c += (
+                '<div id="camp_edit" style="display:none;margin-top:.75rem;border-top:1px solid #eee;padding-top:.75rem">'
+                '<p style="font-size:.82rem;color:#666;margin-bottom:.6rem">Отметьте кампанию и нажмите «Сохранить изменения» — CTR будет считаться из неё.</p>'
+                '<div id="camp_list2"><span style="color:#aaa;font-size:.88rem">&#9203; Загрузка кампаний...</span></div>'
+                '<form method="POST" action="/tests/' + str(test_id) + '/campaigns" style="margin-top:.7rem">'
+                '<input type="hidden" id="camp_ids_input" name="campaign_ids" value="' + campaign_ids + '">'
+                '<button class="btn bp" style="font-size:.85rem;padding:.4rem .9rem">&#10003; Сохранить изменения</button>'
+                '</form>'
+                '</div>'
+            )
+            c += '''<script>
+fetch("/api/perf-campaigns?sku=''' + camp_sku + '''")
+.then(function(r){return r.json();})
+.then(function(data){
+  var el=document.getElementById("camp_list2");
+  var sel=''' + sel_json + ''';
+  if(!data.campaigns||!data.campaigns.length){
+    el.innerHTML='<div style="background:#fff3cd;border-radius:8px;padding:.7rem;font-size:.88rem">&#9888; Кампаний с этим товаром не найдено. <a href="https://seller.ozon.ru/app/advertisement/product/cpc" target="_blank" style="color:#1e40af;font-weight:600">Создать кампанию</a></div>';
+    return;
+  }
+  var html="";
+  data.campaigns.forEach(function(camp){
+    var chk=sel.indexOf(camp.id)>=0?"checked":"";
+    html+='<label style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;cursor:pointer;font-size:.88rem"><input type="checkbox" value="'+camp.id+'" '+chk+' onchange="updC()" style="accent-color:#667eea"> '+camp.name+' <span style="color:#aaa;font-size:.78rem">(ID: '+camp.id+')</span></label>';
+  });
+  el.innerHTML=html;
+})
+.catch(function(){document.getElementById("camp_list2").innerHTML='<span style="color:#e74c3c;font-size:.88rem">Ошибка загрузки</span>';});
+function updC(){
+  var ids=[];
+  document.querySelectorAll("#camp_list2 input:checked").forEach(function(x){ids.push(x.value);});
+  document.getElementById("camp_ids_input").value=ids.join(",");
+}
+</script>
+</div>'''
         else:
             c += ('<div class="box" style="margin-top:1.5rem;background:#fff8e1;border:1px solid #ffe082">'
                   '<p style="font-size:.9rem">&#128640; <strong>Хотите точный CTR?</strong> '
                   '<a href="/api-keys" style="color:#1e40af;font-weight:600">Подключите Performance API</a> '
                   'и выберите рекламную кампанию для этого теста.</p></div>')
+
 
     # Кнопка завершения
     # Кнопка завершения
