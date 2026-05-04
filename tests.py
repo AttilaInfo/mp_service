@@ -293,7 +293,7 @@ document.addEventListener('DOMContentLoaded', function() {{
   <div class="fg">
     <label>Стратегия смены фото</label>
     <div style="background:#fff8e1;border:1.5px solid #ffe082;border-radius:8px;padding:.6rem .9rem;margin-bottom:.8rem;font-size:.85rem;color:#5d4037">
-      &#128161; <strong>Важно:</strong> тест автоматически завершится, когда самый слабый вариант наберёт <strong>10 000 показов</strong> — это справедливо для любой стратегии. Вы также можете завершить тест самостоятельно в любое время.
+      &#128161; <strong>Важно:</strong> Вы можете завершить тест самостоятельно в любое время. Тест автоматически завершится через <strong>14 дней</strong> или когда все варианты наберут по <strong>10 000 показов</strong> — это справедливо для любой стратегии.
     </div>
 
     <!-- Вариант 1: по времени -->
