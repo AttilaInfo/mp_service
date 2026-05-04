@@ -416,7 +416,25 @@ function clearSearch() {
 function clearProduct() {
   document.getElementById('product_val').value = '';
   document.getElementById('prod_selected').style.display = 'none';
-  document.getElementById('prod_search').focus();
+
+  // Сбрасываем блок рекламных кампаний
+  var campStatus = document.getElementById('camp_status');
+  if (campStatus) campStatus.innerHTML = '<span style="color:#aaa;font-size:.9rem">&#128269; Выберите товар выше — список кампаний загрузится автоматически</span>';
+  var campSection = document.getElementById('camp_section');
+  if (campSection) campSection.style.borderColor = '#e8eaed';
+  var campIds = document.getElementById('camp_ids_field');
+  if (campIds) campIds.value = '';
+  var vs = document.getElementById('variants_section');
+  if (vs) vs.style.display = 'none';
+
+  // Показываем дропдаун через setTimeout — иначе click-outside закроет его
+  setTimeout(function() {
+    var srch = document.getElementById('prod_search');
+    if (srch) {
+      srch.focus();
+      renderDropdown('');
+    }
+  }, 50);
 }
 
 function checkBySku() {
