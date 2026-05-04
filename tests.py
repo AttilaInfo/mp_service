@@ -1022,6 +1022,7 @@ def api_perf_campaigns():
 
         # Шаг 1: получаем числовой product_id через Seller API (offer_id → product_id)
         ozon_product_id = None
+        all_product_ids = set()
         import logging
         log = logging.getLogger('perf_campaigns')
         try:
@@ -1049,31 +1050,35 @@ def api_perf_campaigns():
                         items = rj['result'].get('items') or rj['result'].get('item_list') or []
                     elif 'items' in rj:
                         items = rj['items']
-                    log.info(f'items from info/list: {items[:2]}')
+                    log.info(f'items from info/list: {items[:3]}')
+                    # Собираем ВСЕ product_id этого offer_id (FBO, FBS могут иметь разные ID)
+                    all_product_ids = set()
                     for item in items:
-                        pid = item.get('id') or item.get('product_id') or item.get('fbo_sku') or item.get('fbs_sku')
-                        if pid:
-                            ozon_product_id = str(pid)
-                            break
-                if not ozon_product_id:
-                    # Запасной вариант: v2/product/list + filter by offer_id
+                        for key in ('id', 'product_id', 'fbo_sku', 'fbs_sku'):
+                            v = item.get(key)
+                            if v:
+                                all_product_ids.add(str(v))
+                    if all_product_ids:
+                        ozon_product_id = next(iter(all_product_ids))  # для обратной совместимости
+                # Запасной вариант: v2/product/list
+                if not all_product_ids:
+                    all_product_ids = set()
                     rp2 = req.post(
                         'https://api-seller.ozon.ru/v2/product/list',
                         headers=seller_hdrs,
-                        json={'filter': {'offer_id': [sku]}, 'limit': 5},
+                        json={'filter': {'offer_id': [sku]}, 'limit': 10},
                         timeout=10
                     )
                     log.info(f'product/list status={rp2.status_code} body={rp2.text[:400]}')
                     if rp2.status_code == 200:
-                        rj2 = rp2.json()
-                        items2 = (rj2.get('result') or {}).get('items') or []
-                        log.info(f'items from product/list: {items2[:2]}')
+                        items2 = (rp2.json().get('result') or {}).get('items') or []
+                        log.info(f'items from product/list: {items2[:3]}')
                         for item in items2:
                             pid = item.get('product_id') or item.get('id')
                             if pid:
+                                all_product_ids.add(str(pid))
                                 ozon_product_id = str(pid)
-                                break
-                log.info(f'ozon_product_id={ozon_product_id}')
+                log.info(f'all_product_ids={all_product_ids}')
         except Exception as e:
             log.warning(f'product_id lookup failed: {e}')
 
@@ -1109,9 +1114,9 @@ def api_perf_campaigns():
                             obj_name  = str(obj.get('name', ''))
                             # Сначала сравниваем по offer_id/sku/name
                             match = bool(sku) and sku in (obj_offer, obj_sku, obj_name)
-                            # Если не совпало — сравниваем по числовому product_id
-                            if not match and ozon_product_id and obj_id:
-                                match = (ozon_product_id == obj_id)
+                            # Если не совпало — сравниваем по числовому product_id (все варианты FBO/FBS)
+                            if not match and obj_id:
+                                match = obj_id in all_product_ids
                             log.info(f'    obj_id={obj_id} obj_offer={obj_offer} ozon_pid={ozon_product_id} match={match}')
                             if match:
                                 found = True
