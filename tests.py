@@ -255,14 +255,17 @@ function updateCampSel() {{
 
 // Загружаем кампании автоматически когда выбран товар
 document.addEventListener('DOMContentLoaded', function() {{
-  // Слушаем выбор товара
-  var observer = new MutationObserver(function() {{
-    var sku = document.getElementById('selected_sku');
-    if (sku && sku.value) loadCampaigns();
-  }});
+  // Следим за выбором товара через polling
+  var _lastSku = '';
+  setInterval(function() {{
+    var skuField = document.getElementById('selected_sku');
+    if (skuField && skuField.value && skuField.value !== _lastSku) {{
+      _lastSku = skuField.value;
+      loadCampaigns();
+    }}
+  }}, 500);
   var skuField = document.getElementById('selected_sku');
   if (skuField) {{
-    observer.observe(skuField, {{attributes: true, attributeFilter: ['value']}});
     if (skuField.value) loadCampaigns();;
   }}
 }});
