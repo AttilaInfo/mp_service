@@ -113,16 +113,13 @@ def new_test():
         f'<option value="{k["id"]}">{k["shop_name"]} (ID: {k["client_id"]})</option>'
         for k in active_keys
     )
-    err_html = f'<div class="al er">{err}</div>' if err else ''
-
     # Баланс токенов и стоимость теста
     balance   = db.get_balance(u['id'])
     service   = db.get_service('ab_test')
     test_cost = service['token_cost'] if service else 500
     enough    = balance >= test_cost
-    # Если баланс недостаточен — скрываем err_html (balance_html уже показывает проблему)
-    if not enough:
-        err = ''
+    # err_html вычисляем ПОСЛЕ проверки баланса — при нехватке токенов скрываем дубль
+    err_html = '' if not enough else (f'<div class="al er">{err}</div>' if err else '')
     if enough:
         balance_html = (
             '<div style="background:#d4edda;border:1.5px solid #c3e6cb;border-radius:10px;'
