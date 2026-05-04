@@ -23,6 +23,7 @@ import psycopg2.extras
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
 OZON_API_URL = 'https://api-seller.ozon.ru'
 ROTATION_THRESHOLD_VIEWS = 10_000   # показов у слабейшего → завершаем тест
+ROTATION_THRESHOLD_DAYS  = 14       # дней максимум → завершаем тест
 
 logging.basicConfig(
     level=logging.INFO,
@@ -406,7 +407,31 @@ def process_test(conn, test, key):
         cur.execute('SELECT * FROM test_variants WHERE test_id=%s ORDER BY label', (test_id,))
         variants = [dict(r) for r in cur.fetchall()]
 
-    # 3. Проверяем условие завершения (слабейший набрал 10 000 показов)
+    # 3. Проверяем условие автозавершения
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    # 3а. Проверка по времени — 14 дней
+    created_at = test.get('created_at')
+    if isinstance(created_at, str):
+        try:
+            created_at = datetime.fromisoformat(created_at.replace('Z', ''))
+        except Exception:
+            created_at = None
+    if created_at:
+        days_elapsed = (now - created_at.replace(tzinfo=None)).days
+        if days_elapsed >= ROTATION_THRESHOLD_DAYS:
+            winner = max(variants, key=lambda v: v.get('ctr') or 0.0)
+            log.info(f'  ЗАВЕРШАЕМ тест: прошло {days_elapsed} дней (лимит {ROTATION_THRESHOLD_DAYS}), победитель {winner["label"]} CTR={winner.get("ctr")}%')
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE tests SET status='completed', winner=%s WHERE id=%s",
+                    (winner['label'], test_id)
+                )
+            conn.commit()
+            _apply_photo(test, key, winner, variants)
+            return
+
+    # 3б. Проверка по показам — слабейший набрал 10 000
     weak = weakest_variant(variants)
     if (weak.get('views') or 0) >= ROTATION_THRESHOLD_VIEWS:
         # Определяем победителя по CTR
