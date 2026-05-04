@@ -218,9 +218,10 @@ function loadCampaigns() {{
           + '&#128640; Создать рекламную кампанию в Озоне &#8594;</a>'
           + '<p style="margin:.7rem 0 0;font-size:.8rem;color:#999">Озон &#8594; Продвижение &#8594; Оплата за клик &#8594; Создать кампанию. После создания нажмите «Обновить список кампаний».</p>'
           + '</div>';
-        document.getElementById('submit_btn').disabled = true;
-        document.getElementById('submit_hint').textContent = 'Создайте рекламную кампанию и обновите список';
-        document.getElementById('submit_hint').style.display = '';
+        var sbtn = document.getElementById('submit_btn');
+        var shint = document.getElementById('submit_hint');
+        if (sbtn) sbtn.disabled = true;
+        if (shint) {{ shint.textContent = 'Создайте рекламную кампанию и обновите список'; shint.style.display = ''; }}
         document.getElementById('camp_section').style.borderColor = '#ffc107';
         return;
       }}
