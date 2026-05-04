@@ -212,7 +212,8 @@ function loadCampaigns() {{
       if (!camps.length) {{
         el.innerHTML = '<div style="background:#fff8e1;border:1.5px solid #ffc107;border-radius:10px;padding:1rem 1.1rem;line-height:1.6">'
           + '<p style="font-weight:700;color:#856404;margin:0 0 .5rem;font-size:.95rem">&#9888; Рекламная кампания не найдена</p>'
-          + '<p style="color:#555;font-size:.88rem;margin:0 0 .7rem">Для A/B тестирования необходима работающая рекламная кампания на этот товар — без неё мы не сможем отслеживать CTR.</p>'
+          + '<p style="color:#555;font-size:.88rem;margin:0 0 .4rem">Для A/B тестирования необходима работающая рекламная кампания на этот товар — без неё мы не сможем отслеживать CTR.</p>'
+          + '<p style="color:#888;font-size:.82rem;margin:0 0 .7rem">&#128161; Рекомендуем: 1 рекламная кампания — 1 товар. Так статистика будет точнее.</p>'
           + '<a href="https://seller.ozon.ru/app/advertisement/product/cpc" target="_blank" rel="noopener" '
           + 'style="display:inline-flex;align-items:center;gap:.45rem;background:#667eea;color:#fff;border-radius:8px;padding:.5rem 1.1rem;font-weight:600;text-decoration:none;font-size:.88rem">'
           + '&#128640; Создать рекламную кампанию в Озоне &#8594;</a>'
@@ -233,9 +234,8 @@ function loadCampaigns() {{
           + c.name
           + ' <span style="color:#aaa;font-size:.78rem">(ID: ' + c.id + ')</span></label>';
       }});
-      el.innerHTML = html;
+      el.innerHTML = '<p style="font-size:.82rem;color:#555;margin:0 0 .6rem">&#9745; Отметьте галочкой кампанию чтобы продолжить — после этого откроется загрузка фотографий:</p>' + html;
       document.getElementById('camp_section').style.borderColor = '#27ae60';
-      // Подсказка: выберите кампанию чтобы открылась загрузка фото
       var vs = document.getElementById('variants_section');
       // variants_section появится после выбора кампании (в updateCampSel)
     }})
