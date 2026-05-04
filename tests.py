@@ -1020,7 +1020,7 @@ def api_perf_campaigns():
                 for c in campaigns
             ]}
 
-        # Шаг 1: получаем числовой product_id через Seller API (offer_id → product_id)
+        # Шаг 1: получаем ВСЕ числовые product_id для этого offer_id через Seller API
         ozon_product_id = None
         all_product_ids = set()
         import logging
@@ -1034,70 +1034,45 @@ def api_perf_campaigns():
                     'Api-Key':      active_key['api_key'],
                     'Content-Type': 'application/json',
                 }
-                # Пробуем v3/product/info/list
-                rp = req.post(
-                    'https://api-seller.ozon.ru/v3/product/info/list',
+                # Шаг 1а: получаем product_id через v2/product/list
+                rlist = req.post(
+                    'https://api-seller.ozon.ru/v2/product/list',
                     headers=seller_hdrs,
-                    json={'offer_id': [sku]},
+                    json={'filter': {'offer_id': [sku]}, 'limit': 10},
                     timeout=10
                 )
-                log.info(f'product/info/list status={rp.status_code} body={rp.text[:400]}')
-                if rp.status_code == 200:
-                    rj = rp.json()
-                    # Структура: {"result": {"items": [{"id": 123, "offer_id": "..."}]}}
-                    items = []
-                    if 'result' in rj:
-                        items = rj['result'].get('items') or rj['result'].get('item_list') or []
-                    elif 'items' in rj:
-                        items = rj['items']
-                    log.info(f'items from info/list: {items[:3]}')
-                    # Собираем ВСЕ product_id этого offer_id
-                    for item in items:
-                        for key in ('id', 'product_id', 'fbo_sku', 'fbs_sku'):
-                            v = item.get(key)
-                            if v:
-                                all_product_ids.add(str(v))
-                        # Запрашиваем детали чтобы получить FBO и все source SKU
-                        main_id = item.get('id') or item.get('product_id')
-                        if main_id:
-                            try:
-                                rdet = req.post(
-                                    'https://api-seller.ozon.ru/v2/product/info',
-                                    headers=seller_hdrs,
-                                    json={'product_id': int(main_id)},
-                                    timeout=8
-                                )
-                                if rdet.status_code == 200:
-                                    det = rdet.json().get('result') or {}
-                                    log.info(f'product/info: {str(det)[:300]}')
-                                    for key in ('id', 'fbo_sku', 'fbs_sku', 'sku'):
-                                        v = det.get(key)
-                                        if v: all_product_ids.add(str(v))
-                                    for src in det.get('sources', []):
-                                        v = src.get('sku')
-                                        if v: all_product_ids.add(str(v))
-                            except Exception as det_e:
-                                log.warning(f'product/info error: {det_e}')
-                    if all_product_ids:
-                        ozon_product_id = next(iter(all_product_ids))
-                # Запасной вариант: v2/product/list
-                if not all_product_ids:
-                    all_product_ids = set()
-                    rp2 = req.post(
-                        'https://api-seller.ozon.ru/v2/product/list',
+                log.info(f'product/list: {rlist.status_code} {rlist.text[:300]}')
+                product_ids_to_check = []
+                if rlist.status_code == 200:
+                    items_list = (rlist.json().get('result') or {}).get('items') or []
+                    for item in items_list:
+                        pid = item.get('product_id') or item.get('id')
+                        if pid:
+                            product_ids_to_check.append(int(pid))
+                            all_product_ids.add(str(pid))
+
+                # Шаг 1б: для каждого product_id запрашиваем полные данные (FBO + FBS sku)
+                for pid in product_ids_to_check:
+                    rinfo = req.post(
+                        'https://api-seller.ozon.ru/v2/product/info',
                         headers=seller_hdrs,
-                        json={'filter': {'offer_id': [sku]}, 'limit': 10},
-                        timeout=10
+                        json={'product_id': pid},
+                        timeout=8
                     )
-                    log.info(f'product/list status={rp2.status_code} body={rp2.text[:400]}')
-                    if rp2.status_code == 200:
-                        items2 = (rp2.json().get('result') or {}).get('items') or []
-                        log.info(f'items from product/list: {items2[:3]}')
-                        for item in items2:
-                            pid = item.get('product_id') or item.get('id')
-                            if pid:
-                                all_product_ids.add(str(pid))
-                                ozon_product_id = str(pid)
+                    log.info(f'product/info {pid}: {rinfo.status_code} {rinfo.text[:400]}')
+                    if rinfo.status_code == 200:
+                        det = rinfo.json().get('result') or {}
+                        # Прямые поля
+                        for key in ('id', 'fbo_sku', 'fbs_sku', 'sku'):
+                            v = det.get(key)
+                            if v: all_product_ids.add(str(v))
+                        # sources — все склады
+                        for src in (det.get('sources') or []):
+                            v = src.get('sku') or src.get('product_id')
+                            if v: all_product_ids.add(str(v))
+
+                if all_product_ids:
+                    ozon_product_id = next(iter(all_product_ids))
                 log.info(f'all_product_ids={all_product_ids}')
         except Exception as e:
             log.warning(f'product_id lookup failed: {e}')
@@ -1106,7 +1081,7 @@ def api_perf_campaigns():
         # Логика: fail-open — если /objects не работает, показываем кампанию.
         # Исключаем только если /objects вернул 200 и товара там точно нет.
         result = []
-        debug_info = {'ozon_product_id': ozon_product_id, 'camps': {}}
+        debug_info = {'ozon_product_id': ozon_product_id, 'all_ids': list(all_product_ids), 'camps': {}}
         for camp in campaigns:
             camp_id   = str(camp.get('id', ''))
             camp_name = camp.get('title', '') or camp.get('name', '')
