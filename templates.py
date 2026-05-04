@@ -60,7 +60,7 @@ APP_CSS = (
     'table{width:100%;border-collapse:collapse}'
     'th{background:#f8f9fa;padding:.75rem 1rem;text-align:left;font-size:.85rem;color:#666;font-weight:600}'
     'td{padding:.75rem 1rem;border-top:1px solid #f0f0f0;font-size:.9rem}'
-    '@media(max-width:600px){.hdr{justify-content:center}}'
+    '@media(max-width:768px){''.hdr{padding:.75rem 1rem;gap:.5rem}''.hdr h1{font-size:1.1rem}''.nb{padding:.4rem .7rem;font-size:.82rem}''.wrap{margin:1rem auto;padding:0 .75rem}''.ttl{font-size:1.3rem;margin-bottom:1rem}''.box{padding:1rem;border-radius:10px}''.box h2{font-size:1rem}''.btn{padding:.6rem 1rem;font-size:.88rem}''.fi{padding:.6rem .8rem}''.kc{padding:.85rem}''.cards{grid-template-columns:1fr 1fr;gap:.75rem}''table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}''}''@media(max-width:480px){''.hdr nav{gap:.3rem}''.nb{padding:.35rem .55rem;font-size:.78rem}''.cards{grid-template-columns:1fr}''.wrap{padding:0 .5rem}''.box{padding:.85rem;margin-bottom:1rem}''}'
 )
 
 # ── CSS для лендинга ───────────────────────────────────────────────────────
