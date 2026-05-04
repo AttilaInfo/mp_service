@@ -117,7 +117,7 @@ def register():
         '<span>Я принимаю условия '
         '<a href="/terms" target="_blank" style="color:#667eea;font-weight:600">публичной оферты</a>'
         ' и даю согласие на '
-        '<a href="/contacts" target="_blank" style="color:#667eea;font-weight:600">обработку персональных данных</a>'
+        '<a href="/privacy" target="_blank" style="color:#667eea;font-weight:600">обработку персональных данных</a>'
         '</span></label></div>'
         + '<button class="btn bp" style="width:100%">Создать аккаунт бесплатно</button>'
         '</form>'
