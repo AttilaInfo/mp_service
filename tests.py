@@ -75,7 +75,7 @@ def tests():
                 '<td>' + status_badge + '</td>'
                 '<td>' + str(t['created_at'])[:10] + '</td>'
                 '<td style="display:flex;gap:.4rem;flex-wrap:wrap" onclick="event.stopPropagation()">'
-                + (('<a href="/tests/' + tid + '/edit" class="btn" style="padding:.4rem .9rem;font-size:.82rem;background:#fff3cd;border:1px solid #ffc107;color:#856404">&#9998; Изменить</a>') if t['status'] == 'running' else '') +
+                + (('<a href="/tests/' + tid + '/edit" class="btn" style="padding:.4rem .9rem;font-size:.82rem;background:#fff3cd;border:1px solid #ffc107;color:#856404">Изменить</a>') if t['status'] == 'running' else '') +
                 (('<form method="POST" action="/tests/' + tid + '/delete" style="margin:0"><button class="btn bd" style="padding:.4rem .9rem;font-size:.82rem" onclick="return confirm(&apos;Удалить тест и все данные?&apos;)">&#128465; Удалить</button></form>') if t['status'] != 'running' else '') +
                 '</td>'
                 '</tr>'
@@ -778,7 +778,7 @@ def test_detail(test_id):
                 '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:.75rem">'
                 '<h3 style="margin:0">&#128640; Рекламные кампании для точного CTR</h3>'
                 '<button type="button" onclick="var s=document.getElementById(\'camp_edit\');s.style.display=s.style.display===\'none\'?\'block\':\'none\'" '
-                'style="background:#f0f2f5;border:1px solid #ddd;border-radius:8px;padding:.3rem .8rem;cursor:pointer;font-size:.82rem;color:#444">&#9998; Изменить</button>'
+                'style="background:#f0f2f5;border:1px solid #ddd;border-radius:8px;padding:.3rem .8rem;cursor:pointer;font-size:.82rem;color:#444">Изменить</button>'
                 '</div>'
             )
             if selected_campaigns:
