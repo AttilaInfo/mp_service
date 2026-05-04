@@ -184,7 +184,6 @@ def new_test():
 var _selectedCamps = [];
 
 function loadCampaigns() {{
-  // product_val хранит "sku|название товара" — парсим SKU
   var prodEl = document.getElementById('product_val');
   var sku = prodEl && prodEl.value ? prodEl.value.split('|')[0].trim() : '';
   if (!sku) {{
@@ -193,9 +192,8 @@ function loadCampaigns() {{
   }}
   document.getElementById('camp_status').innerHTML = '<span style="color:#aaa;font-size:.9rem">&#9203; Загрузка кампаний...</span>';
 
-  // Таймаут 15 секунд — если Railway блокирует запрос, не зависаем вечно
   var controller = new AbortController();
-  var timer = setTimeout(function(){{ controller.abort(); }}, 15000);
+  var timer = setTimeout(function(){{ controller.abort(); }}, 20000);
 
   fetch('/api/perf-campaigns?sku=' + encodeURIComponent(sku), {{signal: controller.signal}})
     .then(function(r){{ clearTimeout(timer); return r.json(); }})
@@ -214,11 +212,11 @@ function loadCampaigns() {{
       if (!camps.length) {{
         el.innerHTML = '<div style="background:#fff8e1;border:1.5px solid #ffc107;border-radius:10px;padding:1rem 1.1rem;line-height:1.6">'
           + '<p style="font-weight:700;color:#856404;margin:0 0 .5rem;font-size:.95rem">&#9888; Рекламная кампания не найдена</p>'
-          + '<p style="color:#555;font-size:.88rem;margin:0 0 .7rem">Для A/B тестирования необходима работающая рекламная кампания на этот товар — без неё мы не сможем отслеживать точный CTR.</p>'
+          + '<p style="color:#555;font-size:.88rem;margin:0 0 .7rem">Для A/B тестирования необходима работающая рекламная кампания на этот товар — без неё мы не сможем отслеживать CTR.</p>'
           + '<a href="https://seller.ozon.ru/app/advertisement/product/cpc" target="_blank" rel="noopener" '
           + 'style="display:inline-flex;align-items:center;gap:.45rem;background:#667eea;color:#fff;border-radius:8px;padding:.5rem 1.1rem;font-weight:600;text-decoration:none;font-size:.88rem">'
           + '&#128640; Создать рекламную кампанию в Озоне &#8594;</a>'
-          + '<p style="margin:.7rem 0 0;font-size:.8rem;color:#999">Озон → Продвижение → Оплата за клик → Создать кампанию. После создания вернитесь и нажмите «Обновить список кампаний».</p>'
+          + '<p style="margin:.7rem 0 0;font-size:.8rem;color:#999">Озон &#8594; Продвижение &#8594; Оплата за клик &#8594; Создать кампанию. После создания нажмите «Обновить список кампаний».</p>'
           + '</div>';
         document.getElementById('submit_btn').disabled = true;
         document.getElementById('submit_hint').textContent = 'Создайте рекламную кампанию и обновите список';
@@ -239,7 +237,7 @@ function loadCampaigns() {{
     }})
     .catch(function(e) {{
       clearTimeout(timer);
-      var msg = (e.name === 'AbortError') ? 'Превышено время ожидания (15 сек).' : 'Ошибка соединения.';
+      var msg = (e.name === 'AbortError') ? 'Превышено время ожидания (20 сек).' : 'Ошибка соединения.';
       document.getElementById('camp_status').innerHTML = '<div style="background:#f8d7da;border-radius:8px;padding:.8rem;font-size:.88rem;color:#721c24">'
         + '&#10060; ' + msg + ' '
         + '<button type="button" onclick="loadCampaigns()" style="background:none;border:none;color:#1e40af;cursor:pointer;font-weight:600;font-size:.88rem;text-decoration:underline;padding:0">Попробовать ещё раз</button></div>';
@@ -266,7 +264,6 @@ function updateCampSel() {{
 
 // Загружаем кампании автоматически когда выбран товар
 document.addEventListener('DOMContentLoaded', function() {{
-  // Следим за product_val через polling (product-search.js пишет туда "sku|название")
   var _lastProdVal = '';
   setInterval(function() {{
     var prodField = document.getElementById('product_val');
@@ -276,7 +273,6 @@ document.addEventListener('DOMContentLoaded', function() {{
       loadCampaigns();
     }}
   }}, 500);
-  // Если товар уже выбран при загрузке страницы
   var prodField = document.getElementById('product_val');
   if (prodField && prodField.value) loadCampaigns();
 }});
@@ -1011,12 +1007,38 @@ def api_perf_campaigns():
 
         campaigns = r2.json().get('list', [])
 
-        # Если SKU задан — фильтруем кампании где есть этот товар
+        # Фильтруем кампании: проверяем объекты каждой кампании на наличие нашего товара
         result = []
         for camp in campaigns:
             camp_id   = str(camp.get('id', ''))
             camp_name = camp.get('title', '') or camp.get('name', '')
-            result.append({'id': camp_id, 'name': camp_name})
+
+            if not sku:
+                result.append({'id': camp_id, 'name': camp_name})
+                continue
+
+            try:
+                r3 = req.get(
+                    f'https://api-performance.ozon.ru/api/client/campaign/{camp_id}/objects',
+                    headers=headers,
+                    timeout=8
+                )
+                if r3.status_code == 200:
+                    data3   = r3.json()
+                    objects = (data3.get('list') or data3.get('items') or
+                               (data3.get('result') or {}).get('items') or [])
+                    for obj in objects:
+                        if sku in (
+                            str(obj.get('id', '')),
+                            str(obj.get('offer_id', '')),
+                            str(obj.get('name', '')),
+                            str(obj.get('sku', '')),
+                        ):
+                            result.append({'id': camp_id, 'name': camp_name})
+                            break
+                # Если /objects не отвечает — пропускаем кампанию
+            except Exception:
+                pass
 
         return {'campaigns': result}
 
