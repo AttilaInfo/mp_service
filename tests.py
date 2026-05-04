@@ -759,7 +759,7 @@ def test_detail(test_id):
             c += '  var el=document.getElementById("camp_list");'
             c += '  var sel=' + sel_json + ';'
             c += '  if(!data.campaigns||!data.campaigns.length){'
-            c += '    el.innerHTML="<div style=\\\\\"background:#fff3cd;border-radius:8px;padding:.8rem;font-size:.88rem\\\\\">&#9888; Создайте рекламную кампанию в Озоне: Продвижение &rarr; Реклама &rarr; Оплата за клик. Добавьте этот товар и нажмите Обновить список.</div>";'
+            c += '    el.innerHTML="<div style=\\\\\"background:#fff3cd;border-radius:8px;padding:.8rem;font-size:.88rem\\\\\">&#9888; Создайте рекламную кампанию в Озоне: Продвижение &rarr; Оплата за клик &rarr; Создать кампанию. Добавьте этот товар и нажмите Обновить список.</div>";'
             c += '    document.getElementById(\\"camp_desc_text\\").textContent=\\"Рекламных кампаний с этим товаром пока нет. Создайте кампанию и нажмите Обновить список.\\";'
             c += '    return;}'
             c += '  var html="";data.campaigns.forEach(function(camp){'
