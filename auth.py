@@ -77,8 +77,11 @@ def register():
         pw          = request.form.get('password', '')
         pw2         = request.form.get('confirm', '')
 
+        agree = request.form.get('agree', '')
         if not all([saved_name, saved_email, pw, pw2]):
             err = 'Заполните все поля'
+        elif not agree:
+            err = 'Необходимо согласиться с офертой и политикой обработки данных'
         elif not valid_email(saved_email):
             err = 'Некорректный email'
         elif len(pw) < 8:
@@ -108,6 +111,14 @@ def register():
         + pw_input('password', 'pw_r1', 'Мин. 8 символов', 'Пароль')
         + pw_input('confirm',  'pw_r2', 'Повторите пароль', 'Повторите пароль')
         + '<div id="pw_match_hint" style="font-size:.82rem;margin-top:-.6rem;margin-bottom:1rem;min-height:1.1em"></div>'
+        + '<div style="margin-bottom:1rem">'
+        '<label style="display:flex;align-items:flex-start;gap:.6rem;cursor:pointer;font-size:.85rem;color:#555;line-height:1.4">'
+        '<input type="checkbox" name="agree" style="margin-top:.2rem;accent-color:#667eea;flex-shrink:0" required> '
+        '<span>Я принимаю условия '
+        '<a href="/terms" target="_blank" style="color:#667eea;font-weight:600">публичной оферты</a>'
+        ' и даю согласие на '
+        '<a href="/contacts" target="_blank" style="color:#667eea;font-weight:600">обработку персональных данных</a>'
+        '</span></label></div>'
         + '<button class="btn bp" style="width:100%">Создать аккаунт бесплатно</button>'
         '</form>'
         '<p class="al2" onclick="location=\'/login\'">Есть аккаунт? Войти</p>'
