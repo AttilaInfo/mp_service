@@ -482,10 +482,15 @@ document.addEventListener('DOMContentLoaded', function(){
 
 
 
+# Кэш товаров: {user_id: {'ts': timestamp, 'data': [...]}}
+_products_cache = {}
+_CACHE_TTL = 600  # 10 минут
+
 @api_bp.route('/api/products')
 def api_products():
     """Загрузка товаров с остатками для формы создания теста."""
     from flask import jsonify
+    import time as _t
     u = me()
     if not u:
         return jsonify([])
@@ -494,10 +499,14 @@ def api_products():
     if not key:
         return jsonify([])
 
+    # Проверяем кэш
+    cache = _products_cache.get(u['id'])
+    if cache and (_t.time() - cache['ts']) < _CACHE_TTL:
+        return jsonify(cache['data'])
+
     hk = {'Client-Id': key['client_id'], 'Api-Key': key['api_key'], 'Content-Type': 'application/json'}
     all_items = []
     last_id = ''
-    import time as _t
     try:
         # Шаг 1: получаем ID товаров в продаже
         while len(all_items) < 2000:
@@ -547,6 +556,8 @@ def api_products():
                     products.append({'sku': sku, 'ozon_id': ozon_id, 'name': name, 'img': img})
             _t.sleep(0.2)
 
+        # Сохраняем в кэш
+        _products_cache[u['id']] = {'ts': _t.time(), 'data': products}
         return jsonify(products)
     except Exception as e:
         return jsonify([])
