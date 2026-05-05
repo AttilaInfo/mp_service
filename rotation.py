@@ -284,17 +284,19 @@ def get_perf_token(user_id):
 def get_perf_totals_now(token, campaign_ids, date_from):
     """Получить суммарную статистику кампаний от date_from до сегодня.
     Используется для дельта-метода: baseline при активации варианта.
-    Возвращает dict {views, clicks} или None.
+    Возвращает dict {views, clicks, tocart} или None.
     """
     date_to = datetime.now(timezone.utc).strftime('%Y-%m-%d')
     total_views  = 0
     total_clicks = 0
+    total_tocart = 0
     for campaign_id in campaign_ids:
         stats = get_perf_variant_stats(token, campaign_id, date_from, date_to)
         if stats:
             total_views  += stats['views']
             total_clicks += stats['clicks']
-    return {'views': total_views, 'clicks': total_clicks}
+            total_tocart += stats.get('tocart', 0)
+    return {'views': total_views, 'clicks': total_clicks, 'tocart': total_tocart}
 
 
 def get_perf_variant_stats(token, campaign_id, date_from, date_to):
@@ -314,7 +316,7 @@ def get_perf_variant_stats(token, campaign_id, date_from, date_to):
                 'campaigns': [str(campaign_id)],
                 'dateFrom':  date_from,
                 'dateTo':    date_to,
-                'groupBy':   'DATE'
+                'groupBy':   'HOUR'
             },
             timeout=15
         )
@@ -369,18 +371,37 @@ def get_perf_variant_stats(token, campaign_id, date_from, date_to):
             if not row[0] or row[0].startswith('Всего') or row[0].startswith('итого'):
                 # Строка итогов — берём показы и клики
                 try:
-                    idx_views  = next((i for i, h in enumerate(headers_row) if 'показ' in h.lower()), 4)
-                    idx_clicks = next((i for i, h in enumerate(headers_row) if 'клик' in h.lower()), 5)
-                    if len(row) > idx_views:
-                        views  = int(float(row[idx_views].replace(',', '.').replace(' ', '') or 0))
-                    if len(row) > idx_clicks:
-                        clicks = int(float(row[idx_clicks].replace(',', '.').replace(' ', '') or 0))
+                    idx_views  = next((i for i, h in enumerate(headers_row) if 'показ' in h.lower()), 3)
+                    idx_clicks = next((i for i, h in enumerate(headers_row) if 'клик' in h.lower()), 4)
+                    idx_tocart = next((i for i, h in enumerate(headers_row) if 'корзин' in h.lower()), 6)
+                    # HOUR groupBy: Всего row may have 2 empty leading cells
+                    # Auto-detect offset by finding first numeric value after index 0
+                    offset = 0
+                    for ci in range(1, min(5, len(row))):
+                        if row[ci] and row[ci].strip() not in ('', ' '):
+                            try:
+                                float(row[ci].replace(',', '.'))
+                                offset = ci - idx_views
+                                if offset < 0:
+                                    offset = 0
+                                break
+                            except ValueError:
+                                continue
+                    def _safe_int(r, idx):
+                        try:
+                            v = r[idx + offset] if idx + offset < len(r) else ''
+                            return int(float(v.replace(',', '.').replace(' ', '') or 0))
+                        except Exception:
+                            return 0
+                    views  = _safe_int(row, idx_views)
+                    clicks = _safe_int(row, idx_clicks)
+                    tocart = _safe_int(row, idx_tocart)
                 except Exception as pe:
                     log.warning(f'  perf CSV parse итого: {pe}')
                 break
 
-        log.info(f'  [PERF API] показы={views} клики={clicks}')
-        return {'views': views, 'clicks': clicks}
+        log.info(f'  [PERF API] показы={views} клики={clicks} корзина={tocart}')
+        return {'views': views, 'clicks': clicks, 'tocart': tocart}
 
     except Exception as e:
         log.error(f'  get_perf_variant_stats: {e}')
@@ -449,7 +470,7 @@ def weakest_variant(variants):
 
 
 
-def _collect_variant_stats(conn, test, key, variant, all_variants, product_id=None):
+def _collect_variant_stats(conn, test, key, variant, all_variants, product_id=None, accumulate=False):
     """Запрашивает статистику из Озона за период активности варианта."""
     activated_at = variant.get('activated_at')
     # Если activated_at пустой — используем дату создания теста как запасной вариант
@@ -495,14 +516,28 @@ def _collect_variant_stats(conn, test, key, variant, all_variants, product_id=No
                 # Дельта = текущий итог минус значение на момент активации варианта
                 delta_views  = max(0, totals_now['views']  - baseline_views)
                 delta_clicks = max(0, totals_now['clicks'] - baseline_clicks)
-                ctr = round(delta_clicks / delta_views * 100, 2) if delta_views > 0 else 0.0
+                delta_tocart = max(0, totals_now.get('tocart', 0) - (variant.get('perf_baseline_tocart') or 0))
+                # CTR = расчётный: суммарные клики / суммарные показы
+                if accumulate:
+                    total_views  = (variant.get('views')  or 0) + delta_views
+                    total_clicks = (variant.get('clicks') or 0) + delta_clicks
+                else:
+                    total_views  = delta_views
+                    total_clicks = delta_clicks
+                ctr = round(total_clicks / total_views * 100, 2) if total_views > 0 else 0.0
+                sql_acc = (
+                    "UPDATE test_variants SET "
+                    "views=COALESCE(views,0)+%s, clicks=COALESCE(clicks,0)+%s, "
+                    "tocart=COALESCE(tocart,0)+%s, ctr=%s WHERE id=%s"
+                )
+                sql_set = "UPDATE test_variants SET views=%s, clicks=%s, tocart=%s, ctr=%s WHERE id=%s"
                 with conn.cursor() as cur:
-                    cur.execute(
-                        'UPDATE test_variants SET views=%s, clicks=%s, tocart=%s, ctr=%s WHERE id=%s',
-                        (delta_views, delta_clicks, delta_clicks, ctr, variant['id'])
-                    )
+                    if accumulate:
+                        cur.execute(sql_acc, (delta_views, delta_clicks, delta_tocart, ctr, variant['id']))
+                    else:
+                        cur.execute(sql_set, (delta_views, delta_clicks, delta_tocart, ctr, variant['id']))
                 conn.commit()
-                log.info(f'  [PERF DELTA] {variant["label"]}: показы={delta_views} клики={delta_clicks} CTR={ctr}% (baseline={baseline_views}/{baseline_clicks}, now={totals_now["views"]}/{totals_now["clicks"]})')
+                log.info(f'  [PERF DELTA{"ACC" if accumulate else ""}] {variant["label"]}: показы={delta_views} клики={delta_clicks} корзина={delta_tocart} CTR={ctr}%')
                 return
 
     # Fallback: Seller API
@@ -660,8 +695,8 @@ def process_test(conn, test, key):
             """, (nxt['id'],))
         conn.commit()
         log.info(f'  Ротация применена: {cur_lbl} → {nxt["label"]}')
-        # Собираем статистику деактивируемого варианта
-        _collect_variant_stats(conn, test, key, cur_variant, variants, product_id=_prod_id)
+        # Собираем финальную статистику деактивируемого варианта (накопительно)
+        _collect_variant_stats(conn, test, key, cur_variant, variants, product_id=_prod_id, accumulate=True)
         # Записываем время активации нового варианта
         try:
             import database as db_local
