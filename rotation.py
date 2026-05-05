@@ -665,6 +665,18 @@ def process_test(conn, test, key):
     _prod_id   = (_prod_info.get('id') or _prod_info.get('product_id')) if _prod_info else None
     _just_initialized = _collect_variant_stats(conn, test, key, cur_variant, variants, product_id=_prod_id)
 
+    # Если baseline только что инициализирован — сбрасываем таймер ротации
+    # чтобы первый вариант получил полный цикл для сбора данных
+    if _just_initialized:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE tests SET last_rotated_at=NOW() WHERE id=%s",
+                (test_id,)
+            )
+        conn.commit()
+        log.info(f'  Baseline инициализирован — таймер ротации сброшен, следующая ротация через {strategy.get("minutes", 15)} мин.')
+        return
+
     # 5. Проверяем нужна ли ротация
     if not should_rotate(dict(test), cur_variant, strategy):
         log.info(f'  Ротация не нужна (текущий: {cur_lbl})')
