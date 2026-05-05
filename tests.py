@@ -1,6 +1,7 @@
 """
 tests.py — управление A/B тестами: список, создание, детали, завершение.
 """
+import threading
 from flask import Blueprint, redirect, request
 from datetime import datetime
 
@@ -538,6 +539,105 @@ document.addEventListener('DOMContentLoaded', function() {{
     return render(html, 'tests')
 
 
+def _init_variant_baseline(user_id, test_id, campaign_ids_str):
+    """Фоновая задача: записывает baseline Performance API для варианта A при создании теста."""
+    import time as _t, psycopg2, psycopg2.extras, requests as _req, io, csv as _csv, logging
+    log = logging.getLogger('baseline_init')
+    try:
+        _t.sleep(2)  # Даём время на создание вариантов в БД
+
+        # Получаем perf_key пользователя
+        conn = db.get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute('SELECT * FROM perf_keys WHERE user_id=%s LIMIT 1', (user_id,))
+            perf = cur.fetchone()
+            cur.execute('SELECT id FROM test_variants WHERE test_id=%s ORDER BY label LIMIT 1', (test_id,))
+            variant_a = cur.fetchone()
+        conn.close()
+
+        if not perf or not variant_a:
+            log.warning(f'baseline_init: нет perf_key или вариантов для теста #{test_id}')
+            return
+
+        # Получаем токен
+        r = _req.post('https://api-performance.ozon.ru/api/client/token',
+            json={'client_id': perf['client_id'], 'client_secret': perf['client_secret'],
+                  'grant_type': 'client_credentials'}, timeout=10)
+        if r.status_code != 200:
+            log.warning(f'baseline_init: ошибка токена {r.status_code}')
+            return
+        token = r.json().get('access_token')
+        headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+
+        today = _t.strftime('%Y-%m-%d')
+        campaign_ids = [c.strip() for c in campaign_ids_str.split(',') if c.strip()]
+        total_views = total_clicks = total_tocart = 0
+
+        for cid in campaign_ids:
+            # Запрашиваем статистику (async)
+            r2 = _req.post('https://api-performance.ozon.ru/api/client/statistics',
+                headers=headers,
+                json={'campaigns': [str(cid)], 'dateFrom': today, 'dateTo': today, 'groupBy': 'HOUR'},
+                timeout=15)
+            if r2.status_code != 200:
+                continue
+            uuid = r2.json().get('UUID')
+            if not uuid:
+                continue
+            # Ждём готовности
+            link = None
+            for _ in range(10):
+                _t.sleep(3)
+                r3 = _req.get(f'https://api-performance.ozon.ru/api/client/statistics/{uuid}',
+                    headers=headers, timeout=15)
+                if r3.json().get('state') == 'OK':
+                    link = r3.json().get('link')
+                    break
+            if not link:
+                continue
+            # Скачиваем CSV
+            r4 = _req.get(f'https://api-performance.ozon.ru{link}', headers=headers, timeout=15)
+            if r4.status_code != 200:
+                continue
+            # Парсим строку Всего
+            reader = _csv.reader(io.StringIO(r4.text), delimiter=';')
+            headers_row = None
+            for row in reader:
+                if not row:
+                    continue
+                if headers_row is None:
+                    headers_row = [h.strip() for h in row]
+                    continue
+                if row[0].startswith('Всего') or row[0].startswith('итого'):
+                    try:
+                        idx_v = next((i for i,h in enumerate(headers_row) if 'показ' in h.lower()), 3)
+                        idx_c = next((i for i,h in enumerate(headers_row) if 'клик' in h.lower()), 4)
+                        idx_t = next((i for i,h in enumerate(headers_row) if 'корзин' in h.lower()), 6)
+                        def _si(r, i):
+                            try: return int(float(r[i].replace(',','.').replace(' ','') or 0))
+                            except: return 0
+                        total_views  += _si(row, idx_v)
+                        total_clicks += _si(row, idx_c)
+                        total_tocart += _si(row, idx_t)
+                    except Exception as e:
+                        log.warning(f'baseline_init CSV parse: {e}')
+                    break
+
+        # Записываем baseline для варианта A
+        conn = db.get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                'UPDATE test_variants SET perf_baseline_views=%s, perf_baseline_clicks=%s WHERE id=%s',
+                (total_views, total_clicks, variant_a['id'])
+            )
+        conn.commit()
+        conn.close()
+        log.info(f'baseline_init: тест #{test_id} вариант A — baseline: показы={total_views} клики={total_clicks} корзина={total_tocart}')
+
+    except Exception as e:
+        log.error(f'baseline_init error: {e}')
+
+
 @tests_bp.route('/tests/create', methods=['POST'])
 def create_test():
     u = me()
@@ -621,6 +721,15 @@ def create_test():
     for i, photo_url in enumerate(photos, start=1):
         label = chr(64 + i)   # A, B, C, …
         db.add_variant(test_id, label, photo_url)
+
+    # Запускаем baseline в фоне — не блокируем пользователя
+    if campaign_ids:
+        t = threading.Thread(
+            target=_init_variant_baseline,
+            args=(u['id'], test_id, campaign_ids),
+            daemon=True
+        )
+        t.start()
 
     return redirect(f'/tests/{test_id}')
 
