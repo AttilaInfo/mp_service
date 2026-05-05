@@ -511,7 +511,7 @@ def _collect_variant_stats(conn, test, key, variant, all_variants, product_id=No
                         )
                     conn.commit()
                     log.info(f'  [PERF INIT] {variant["label"]}: baseline установлен: показы={totals_now["views"]} клики={totals_now["clicks"]}')
-                    return  # Первый прогон — инициализация, статистика 0
+                    return True  # Первый прогон — инициализация, статистика 0
 
                 # Дельта = текущий итог минус значение на момент активации варианта
                 delta_views  = max(0, totals_now['views']  - baseline_views)
@@ -663,7 +663,7 @@ def process_test(conn, test, key):
     time.sleep(1)
     _prod_info = get_product_info(key, test['sku'])
     _prod_id   = (_prod_info.get('id') or _prod_info.get('product_id')) if _prod_info else None
-    _collect_variant_stats(conn, test, key, cur_variant, variants, product_id=_prod_id)
+    _just_initialized = _collect_variant_stats(conn, test, key, cur_variant, variants, product_id=_prod_id)
 
     # 5. Проверяем нужна ли ротация
     if not should_rotate(dict(test), cur_variant, strategy):
@@ -696,7 +696,9 @@ def process_test(conn, test, key):
         conn.commit()
         log.info(f'  Ротация применена: {cur_lbl} → {nxt["label"]}')
         # Собираем финальную статистику деактивируемого варианта (накопительно)
-        _collect_variant_stats(conn, test, key, cur_variant, variants, product_id=_prod_id, accumulate=True)
+        # Если только что произошёл INIT — пропускаем (delta = 0, нечего накапливать)
+        if not _just_initialized:
+            _collect_variant_stats(conn, test, key, cur_variant, variants, product_id=_prod_id, accumulate=True)
         # Записываем время активации нового варианта
         try:
             import database as db_local
