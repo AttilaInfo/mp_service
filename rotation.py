@@ -53,6 +53,8 @@ def init_rotation_columns():
             cur.execute("ALTER TABLE test_variants ADD COLUMN IF NOT EXISTS views_at_rotation INTEGER DEFAULT 0")
             cur.execute("ALTER TABLE test_variants ADD COLUMN IF NOT EXISTS activated_at TIMESTAMP DEFAULT NOW()")
             cur.execute("ALTER TABLE test_variants ADD COLUMN IF NOT EXISTS tocart INTEGER DEFAULT 0")
+            cur.execute("ALTER TABLE test_variants ADD COLUMN IF NOT EXISTS perf_baseline_views INTEGER DEFAULT 0")
+            cur.execute("ALTER TABLE test_variants ADD COLUMN IF NOT EXISTS perf_baseline_clicks INTEGER DEFAULT 0")
         conn.commit()
     log.info('Колонки ротации готовы')
 
@@ -279,6 +281,22 @@ def get_perf_token(user_id):
     return None
 
 
+def get_perf_totals_now(token, campaign_ids, date_from):
+    """Получить суммарную статистику кампаний от date_from до сегодня.
+    Используется для дельта-метода: baseline при активации варианта.
+    Возвращает dict {views, clicks} или None.
+    """
+    date_to = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    total_views  = 0
+    total_clicks = 0
+    for campaign_id in campaign_ids:
+        stats = get_perf_variant_stats(token, campaign_id, date_from, date_to)
+        if stats:
+            total_views  += stats['views']
+            total_clicks += stats['clicks']
+    return {'views': total_views, 'clicks': total_clicks}
+
+
 def get_perf_variant_stats(token, campaign_id, date_from, date_to):
     """Получить статистику кампании за период из Performance API.
     Возвращает dict {views, clicks} или None.
@@ -452,28 +470,28 @@ def _collect_variant_stats(conn, test, key, variant, all_variants, product_id=No
 
     log.info(f'  Сбор статистики {variant["label"]}: {date_from} → {date_to} SKU={test["sku"]} activated_at={variant.get("activated_at")} created_at={test.get("created_at")}')
 
-    # Точный CTR через Performance API
+    # Точный CTR через Performance API — дельта-метод
     campaign_ids_str = test.get('campaign_ids', '') or ''
     campaign_ids = [c.strip() for c in campaign_ids_str.split(',') if c.strip()]
     if campaign_ids:
         token = get_perf_token(test.get('user_id'))
         if token:
-            total_views  = 0
-            total_clicks = 0
-            for cid in campaign_ids:
-                stats = get_perf_variant_stats(token, cid, date_from, date_to)
-                if stats:
-                    total_views  += stats['views']
-                    total_clicks += stats['clicks']
-            if total_views > 0 or total_clicks > 0:
-                ctr = round(total_clicks / total_views * 100, 2) if total_views > 0 else 0.0
+            # Получаем текущий суммарный итог кампании
+            totals_now = get_perf_totals_now(token, campaign_ids, date_from)
+            if totals_now:
+                baseline_views  = variant.get('perf_baseline_views')  or 0
+                baseline_clicks = variant.get('perf_baseline_clicks') or 0
+                # Дельта = текущий итог минус значение на момент активации варианта
+                delta_views  = max(0, totals_now['views']  - baseline_views)
+                delta_clicks = max(0, totals_now['clicks'] - baseline_clicks)
+                ctr = round(delta_clicks / delta_views * 100, 2) if delta_views > 0 else 0.0
                 with conn.cursor() as cur:
                     cur.execute(
                         'UPDATE test_variants SET views=%s, clicks=%s, tocart=%s, ctr=%s WHERE id=%s',
-                        (total_views, total_clicks, total_clicks, ctr, variant['id'])
+                        (delta_views, delta_clicks, delta_clicks, ctr, variant['id'])
                     )
                 conn.commit()
-                log.info(f'  [PERF API] {variant["label"]}: показы={total_views} клики={total_clicks} CTR={ctr}%')
+                log.info(f'  [PERF DELTA] {variant["label"]}: показы={delta_views} клики={delta_clicks} CTR={ctr}% (baseline={baseline_views}/{baseline_clicks}, now={totals_now["views"]}/{totals_now["clicks"]})')
                 return
 
     # Fallback: Seller API
@@ -639,6 +657,25 @@ def process_test(conn, test, key):
             db_local.activate_variant(test_id, nxt['label'])
         except Exception as e:
             log.warning(f'  activate_variant error: {e}')
+        # Записываем baseline для нового варианта (дельта-метод)
+        campaign_ids_str = test.get('campaign_ids', '') or ''
+        campaign_ids_list = [c.strip() for c in campaign_ids_str.split(',') if c.strip()]
+        if campaign_ids_list:
+            try:
+                perf_token = get_perf_token(test.get('user_id'))
+                if perf_token:
+                    test_date = (test.get('created_at') or datetime.now()).strftime('%Y-%m-%d') if not isinstance(test.get('created_at'), str) else test['created_at'][:10]
+                    baseline = get_perf_totals_now(perf_token, campaign_ids_list, test_date)
+                    if baseline:
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                'UPDATE test_variants SET perf_baseline_views=%s, perf_baseline_clicks=%s WHERE id=%s',
+                                (baseline['views'], baseline['clicks'], nxt['id'])
+                            )
+                        conn.commit()
+                        log.info(f'  Baseline для {nxt["label"]}: показы={baseline["views"]} клики={baseline["clicks"]}')
+            except Exception as e:
+                log.warning(f'  baseline error: {e}')
 
 
 def _apply_photo(test, key, variant, all_variants):
