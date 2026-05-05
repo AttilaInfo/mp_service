@@ -98,12 +98,9 @@ def should_rotate(test, variant, strategy):
     now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     if s['type'] == 'time':
-        # Если ротаций ещё не было — первая ротация сразу
-        if not (test.get('rotation_count') or 0):
-            return True
         last = test.get('last_rotated_at')
         if not last:
-            return True
+            return False  # Таймер не запущен — не ротируем
         if isinstance(last, str):
             last = datetime.fromisoformat(last)
         elapsed_minutes = (now - last).total_seconds() / 60
@@ -659,23 +656,22 @@ def process_test(conn, test, key):
     # 4. Находим текущий вариант
     cur_variant = next((v for v in variants if v['label'] == cur_lbl), variants[0])
 
-    # 4.5. Всегда обновляем статистику текущего варианта
-    time.sleep(1)
-    _prod_info = get_product_info(key, test['sku'])
-    _prod_id   = (_prod_info.get('id') or _prod_info.get('product_id')) if _prod_info else None
-    _just_initialized = _collect_variant_stats(conn, test, key, cur_variant, variants, product_id=_prod_id)
-
-    # Если baseline только что инициализирован — сбрасываем таймер ротации
-    # чтобы первый вариант получил полный цикл для сбора данных
-    if _just_initialized:
+    # Для нового теста запускаем таймер ротации (last_rotated_at = NOW)
+    # чтобы первый вариант гарантированно получил полный цикл
+    if not test.get('last_rotated_at'):
         with conn.cursor() as cur:
             cur.execute(
                 "UPDATE tests SET last_rotated_at=NOW() WHERE id=%s",
                 (test_id,)
             )
         conn.commit()
-        log.info(f'  Baseline инициализирован — таймер ротации сброшен, следующая ротация через {strategy.get("minutes", 15)} мин.')
-        return
+        log.info(f'  Новый тест — запускаем таймер, ротация через {strategy.get("minutes", 15)} мин.')
+
+    # 4.5. Всегда обновляем статистику текущего варианта
+    time.sleep(1)
+    _prod_info = get_product_info(key, test['sku'])
+    _prod_id   = (_prod_info.get('id') or _prod_info.get('product_id')) if _prod_info else None
+    _collect_variant_stats(conn, test, key, cur_variant, variants, product_id=_prod_id)
 
     # 5. Проверяем нужна ли ротация
     if not should_rotate(dict(test), cur_variant, strategy):
@@ -708,9 +704,7 @@ def process_test(conn, test, key):
         conn.commit()
         log.info(f'  Ротация применена: {cur_lbl} → {nxt["label"]}')
         # Собираем финальную статистику деактивируемого варианта (накопительно)
-        # Если только что произошёл INIT — пропускаем (delta = 0, нечего накапливать)
-        if not _just_initialized:
-            _collect_variant_stats(conn, test, key, cur_variant, variants, product_id=_prod_id, accumulate=True)
+        _collect_variant_stats(conn, test, key, cur_variant, variants, product_id=_prod_id, accumulate=True)
         # Записываем время активации нового варианта
         try:
             import database as db_local
