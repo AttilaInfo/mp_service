@@ -282,11 +282,15 @@ def get_perf_token(user_id):
 def get_perf_variant_stats(token, campaign_id, date_from, date_to):
     """Получить статистику кампании за период из Performance API.
     Возвращает dict {views, clicks} или None.
+    Flow: POST statistics → UUID → GET statistics/{UUID} → link → GET CSV
     """
     try:
+        import io, csv as csv_mod, time as time_mod
         headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+
+        # 1. Создаём задание
         r = requests.post(
-            'https://api-performance.ozon.ru/api/client/statistics/',
+            'https://api-performance.ozon.ru/api/client/statistics',
             headers=headers,
             json={
                 'campaigns': [str(campaign_id)],
@@ -297,20 +301,69 @@ def get_perf_variant_stats(token, campaign_id, date_from, date_to):
             timeout=15
         )
         log.info(f'  perf stats status={r.status_code} camp={campaign_id} {date_from}→{date_to}')
-        if r.status_code == 200:
-            data = r.json()
-            # Суммируем все дни
-            rows = data.get('items', []) or data.get('result', {}).get('items', [])
-            views  = 0
-            clicks = 0
-            for row in rows:
-                stats = row.get('statistics', {})
-                views  += int(stats.get('shows',  0) or stats.get('views', 0) or 0)
-                clicks += int(stats.get('clicks', 0) or 0)
-            log.info(f'  perf: показы={views} клики={clicks}')
-            return {'views': views, 'clicks': clicks}
-        else:
+        if r.status_code != 200:
             log.warning(f'  perf stats error: {r.status_code} {r.text[:200]}')
+            return None
+
+        uuid = r.json().get('UUID')
+        if not uuid:
+            return None
+
+        # 2. Ждём готовности (state=OK)
+        link = None
+        for _ in range(10):
+            time_mod.sleep(3)
+            r2 = requests.get(
+                f'https://api-performance.ozon.ru/api/client/statistics/{uuid}',
+                headers=headers, timeout=15
+            )
+            data = r2.json()
+            if data.get('state') == 'OK':
+                link = data.get('link')
+                break
+
+        if not link:
+            log.warning(f'  perf: задание не готово за 30 сек')
+            return None
+
+        # 3. Скачиваем CSV
+        r3 = requests.get(
+            f'https://api-performance.ozon.ru{link}',
+            headers=headers, timeout=15
+        )
+        if r3.status_code != 200:
+            log.warning(f'  perf CSV error: {r3.status_code}')
+            return None
+
+        # 4. Парсим CSV — строка "Всего" содержит суммарные данные
+        # Формат: День;sku;Название;Цена;Показы;Клики;CTR...
+        views = 0
+        clicks = 0
+        text = r3.text
+        reader = csv_mod.reader(io.StringIO(text), delimiter=';')
+        headers_row = None
+        for row in reader:
+            if not row:
+                continue
+            if headers_row is None:
+                headers_row = [h.strip() for h in row]
+                continue
+            if not row[0] or row[0].startswith('Всего') or row[0].startswith('итого'):
+                # Строка итогов — берём показы и клики
+                try:
+                    idx_views  = next((i for i, h in enumerate(headers_row) if 'показ' in h.lower()), 4)
+                    idx_clicks = next((i for i, h in enumerate(headers_row) if 'клик' in h.lower()), 5)
+                    if len(row) > idx_views:
+                        views  = int(float(row[idx_views].replace(',', '.').replace(' ', '') or 0))
+                    if len(row) > idx_clicks:
+                        clicks = int(float(row[idx_clicks].replace(',', '.').replace(' ', '') or 0))
+                except Exception as pe:
+                    log.warning(f'  perf CSV parse итого: {pe}')
+                break
+
+        log.info(f'  [PERF API] показы={views} клики={clicks}')
+        return {'views': views, 'clicks': clicks}
+
     except Exception as e:
         log.error(f'  get_perf_variant_stats: {e}')
     return None
