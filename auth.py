@@ -95,6 +95,12 @@ def register():
             session['user_id'] = user_id
             # Приветственный бонус — 1000 токенов = 2 теста бесплатно
             db.add_tokens(user_id, 1000, 'promo', 'Приветственный бонус: 2 теста бесплатно')
+            # Реферальная программа — если пришёл по реф-ссылке
+            ref_code = session.pop('ref_code', None)
+            if ref_code:
+                referrer = db.get_user_by_ref_code(ref_code)
+                if referrer and referrer['id'] != user_id:
+                    db.create_referral(referrer['id'], user_id, percent=10)
             return redirect('/dashboard')
 
     name_val  = ' value="' + saved_name  + '"' if saved_name  else ''
