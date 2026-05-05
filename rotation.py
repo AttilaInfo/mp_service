@@ -250,6 +250,72 @@ def get_analytics(key, offer_id, date_from, date_to):
     return None
 
 
+# ── Performance API ───────────────────────────────────────────────────────────
+
+def get_perf_token(user_id):
+    """Получить access_token Performance API для пользователя."""
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute('SELECT * FROM perf_keys WHERE user_id=%s LIMIT 1', (user_id,))
+            perf = cur.fetchone()
+        conn.close()
+        if not perf:
+            return None
+        r = requests.post(
+            'https://api-performance.ozon.ru/api/client/token',
+            json={
+                'client_id':     perf['client_id'],
+                'client_secret': perf['client_secret'],
+                'grant_type':    'client_credentials'
+            },
+            timeout=10
+        )
+        if r.status_code == 200:
+            return r.json().get('access_token')
+        log.warning(f'  perf token: {r.status_code} {r.text[:100]}')
+    except Exception as e:
+        log.error(f'  get_perf_token: {e}')
+    return None
+
+
+def get_perf_variant_stats(token, campaign_id, date_from, date_to):
+    """Получить статистику кампании за период из Performance API.
+    Возвращает dict {views, clicks} или None.
+    """
+    try:
+        headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+        r = requests.post(
+            'https://api-performance.ozon.ru/api/client/statistics/',
+            headers=headers,
+            json={
+                'campaigns': [str(campaign_id)],
+                'dateFrom':  date_from,
+                'dateTo':    date_to,
+                'groupBy':   'DATE'
+            },
+            timeout=15
+        )
+        log.info(f'  perf stats status={r.status_code} camp={campaign_id} {date_from}→{date_to}')
+        if r.status_code == 200:
+            data = r.json()
+            # Суммируем все дни
+            rows = data.get('items', []) or data.get('result', {}).get('items', [])
+            views  = 0
+            clicks = 0
+            for row in rows:
+                stats = row.get('statistics', {})
+                views  += int(stats.get('shows',  0) or stats.get('views', 0) or 0)
+                clicks += int(stats.get('clicks', 0) or 0)
+            log.info(f'  perf: показы={views} клики={clicks}')
+            return {'views': views, 'clicks': clicks}
+        else:
+            log.warning(f'  perf stats error: {r.status_code} {r.text[:200]}')
+    except Exception as e:
+        log.error(f'  get_perf_variant_stats: {e}')
+    return None
+
+
 # ── Обновление статистики вариантов ──────────────────────────────────────────
 
 def update_variant_stats(conn, test, variants, key):
@@ -332,6 +398,32 @@ def _collect_variant_stats(conn, test, key, variant, all_variants, product_id=No
         return
 
     log.info(f'  Сбор статистики {variant["label"]}: {date_from} → {date_to} SKU={test["sku"]} activated_at={variant.get("activated_at")} created_at={test.get("created_at")}')
+
+    # Точный CTR через Performance API
+    campaign_ids_str = test.get('campaign_ids', '') or ''
+    campaign_ids = [c.strip() for c in campaign_ids_str.split(',') if c.strip()]
+    if campaign_ids:
+        token = get_perf_token(test.get('user_id'))
+        if token:
+            total_views  = 0
+            total_clicks = 0
+            for cid in campaign_ids:
+                stats = get_perf_variant_stats(token, cid, date_from, date_to)
+                if stats:
+                    total_views  += stats['views']
+                    total_clicks += stats['clicks']
+            if total_views > 0 or total_clicks > 0:
+                ctr = round(total_clicks / total_views * 100, 2) if total_views > 0 else 0.0
+                with conn.cursor() as cur:
+                    cur.execute(
+                        'UPDATE test_variants SET views=%s, clicks=%s, tocart=%s, ctr=%s WHERE id=%s',
+                        (total_views, total_clicks, total_clicks, ctr, variant['id'])
+                    )
+                conn.commit()
+                log.info(f'  [PERF API] {variant["label"]}: показы={total_views} клики={total_clicks} CTR={ctr}%')
+                return
+
+    # Fallback: Seller API
     try:
         r = requests.post(
             f'{OZON_API_URL}/v1/analytics/data',
