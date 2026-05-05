@@ -53,8 +53,8 @@ def init_rotation_columns():
             cur.execute("ALTER TABLE test_variants ADD COLUMN IF NOT EXISTS views_at_rotation INTEGER DEFAULT 0")
             cur.execute("ALTER TABLE test_variants ADD COLUMN IF NOT EXISTS activated_at TIMESTAMP DEFAULT NOW()")
             cur.execute("ALTER TABLE test_variants ADD COLUMN IF NOT EXISTS tocart INTEGER DEFAULT 0")
-            cur.execute("ALTER TABLE test_variants ADD COLUMN IF NOT EXISTS perf_baseline_views INTEGER DEFAULT 0")
-            cur.execute("ALTER TABLE test_variants ADD COLUMN IF NOT EXISTS perf_baseline_clicks INTEGER DEFAULT 0")
+            cur.execute("ALTER TABLE test_variants ADD COLUMN IF NOT EXISTS perf_baseline_views INTEGER DEFAULT -1")
+            cur.execute("ALTER TABLE test_variants ADD COLUMN IF NOT EXISTS perf_baseline_clicks INTEGER DEFAULT -1")
         conn.commit()
     log.info('Колонки ротации готовы')
 
@@ -476,11 +476,22 @@ def _collect_variant_stats(conn, test, key, variant, all_variants, product_id=No
     if campaign_ids:
         token = get_perf_token(test.get('user_id'))
         if token:
-            # Получаем текущий суммарный итог кампании
             totals_now = get_perf_totals_now(token, campaign_ids, date_from)
             if totals_now:
-                baseline_views  = variant.get('perf_baseline_views')  or 0
-                baseline_clicks = variant.get('perf_baseline_clicks') or 0
+                baseline_views  = variant.get('perf_baseline_views')
+                baseline_clicks = variant.get('perf_baseline_clicks')
+
+                # Если baseline не инициализирован (-1 или None) — инициализируем сейчас
+                if baseline_views is None or baseline_views == -1:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            'UPDATE test_variants SET perf_baseline_views=%s, perf_baseline_clicks=%s WHERE id=%s',
+                            (totals_now['views'], totals_now['clicks'], variant['id'])
+                        )
+                    conn.commit()
+                    log.info(f'  [PERF INIT] {variant["label"]}: baseline установлен: показы={totals_now["views"]} клики={totals_now["clicks"]}')
+                    return  # Первый прогон — инициализация, статистика 0
+
                 # Дельта = текущий итог минус значение на момент активации варианта
                 delta_views  = max(0, totals_now['views']  - baseline_views)
                 delta_clicks = max(0, totals_now['clicks'] - baseline_clicks)
